@@ -20,7 +20,7 @@ function randomClickAnim(): ClickAnim {
 
 // Identidad visual de un agente: un robot-mascota animado (SVG paramétrico). El
 // color del cuerpo y la forma de los ojos se derivan del id "avatar-N" (que se
-// conserva por compatibilidad con office.config.json), de modo que dos agentes
+// conserva por compatibilidad con agent.config.json), de modo que dos agentes
 // con distinto id nunca comparten icono. La expresión y la animación dependen
 // del estado del agente (idle / trabajando / terminado / error).
 

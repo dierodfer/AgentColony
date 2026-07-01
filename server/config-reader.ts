@@ -3,11 +3,11 @@ import { join, basename } from 'node:path'
 import type { AgentTemplate, SkillInfo, AgentConfig } from './types.ts'
 
 // La app se ejecuta desde la raíz del proyecto (el plugin de Vite corre en ese
-// cwd), donde viven .agents/, .skills/ y office.config.json.
+// cwd), donde viven .agents/ (plantillas + agent.config.json) y .skills/.
 const ROOT = process.cwd()
 const AGENTS_DIR = join(ROOT, '.agents')
 const SKILLS_DIR = join(ROOT, '.skills')
-const TEAM_FILE = join(ROOT, 'office.config.json')
+const TEAM_FILE = join(AGENTS_DIR, 'agent.config.json')
 
 /** Separa el frontmatter YAML simple (key: value) del cuerpo markdown. */
 function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
@@ -69,7 +69,7 @@ export function getSkillBody(id: string): string {
   return parseFrontmatter(readFileSync(path, 'utf8')).body
 }
 
-/** Lee el equipo configurado desde office.config.json. */
+/** Lee el equipo configurado desde .agents/agent.config.json. */
 export function readTeam(): AgentConfig[] {
   if (!existsSync(TEAM_FILE)) return []
   try {
@@ -80,7 +80,7 @@ export function readTeam(): AgentConfig[] {
   }
 }
 
-/** Persiste el equipo en office.config.json. */
+/** Persiste el equipo en .agents/agent.config.json. */
 export function writeTeam(agents: AgentConfig[]): void {
   writeFileSync(TEAM_FILE, JSON.stringify({ agents }, null, 2) + '\n', 'utf8')
 }

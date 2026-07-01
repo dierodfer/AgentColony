@@ -97,7 +97,7 @@ vite (un proceso)
  ├─ Frontend React + Tailwind (src/)
  └─ Plugin officeApiPlugin (server/)
      ├─ /api/models | /api/skills | /api/templates  (catálogos)
-     ├─ /api/agents  (CRUD del equipo → office.config.json)
+     ├─ /api/agents  (CRUD del equipo → .agents/agent.config.json)
      └─ /api/run     (POST con streaming NDJSON de una ronda)
 ```
 
@@ -116,7 +116,7 @@ aleatorio al nuevo agente.
 - **`.agents/*.md`** — plantillas de agente (persona). Frontmatter `name` +
   cuerpo markdown con las instrucciones.
 - **`.skills/*.md`** — skills reutilizables. Frontmatter `name` + cuerpo.
-- **`office.config.json`** — el equipo actual, gestionado por la UI.
+- **`.agents/agent.config.json`** — el equipo actual, gestionado por la UI.
 
 Las plantillas y skills se detectan automáticamente; la app no las modifica.
 Este repositorio incluye un conjunto **genérico** de ejemplo (`backend`,
@@ -138,6 +138,7 @@ Cada agente se muestra en una tarjeta con:
 ```
 AgentColony/
 ├─ .agents/            Plantillas de agente (persona) — *.md
+│  └─ agent.config.json  Equipo actual (gestionado por la UI)
 ├─ .skills/            Skills reutilizables — *.md
 ├─ server/             Plugin de Vite: API + orquestación de Copilot CLI
 │  ├─ vite-plugin.ts   Rutas /api/* y streaming NDJSON
@@ -145,7 +146,6 @@ AgentColony/
 │  ├─ models.ts        Catálogo de modelos
 │  └─ ...
 ├─ src/                Frontend React + Tailwind
-├─ office.config.json  Equipo actual (gestionado por la UI)
 ├─ vite.config.ts
 └─ Makefile            Atajos: setup, dev, build, lint, check
 ```

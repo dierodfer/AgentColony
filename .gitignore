@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Estado local en runtime (equipo de agentes gestionado por la UI). No se
+# versiona: se regenera en la máquina de cada usuario.
+.tmp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

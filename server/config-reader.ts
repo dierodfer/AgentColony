@@ -3,11 +3,15 @@ import { join, basename } from 'node:path'
 import type { AgentTemplate, SkillInfo, AgentConfig } from './types.ts'
 
 // La app se ejecuta desde la raíz del proyecto (el plugin de Vite corre en ese
-// cwd), donde viven .agents/ (plantillas + agent.config.json) y .skills/.
+// cwd), donde viven .agents/ (plantillas) y .skills/.
 const ROOT = process.cwd()
 const AGENTS_DIR = join(ROOT, '.agents')
 const SKILLS_DIR = join(ROOT, '.skills')
-const TEAM_FILE = join(AGENTS_DIR, 'agent.config.json')
+// El equipo es estado local en runtime, no código fuente: se guarda en una
+// carpeta temporal del proyecto (.tmp/, ignorada por git) que se regenera en
+// la máquina de cada usuario.
+const TEAM_DIR = join(ROOT, '.tmp')
+const TEAM_FILE = join(TEAM_DIR, 'agent.config.json')
 
 /** Separa el frontmatter YAML simple (key: value) del cuerpo markdown. */
 function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
@@ -69,7 +73,7 @@ export function getSkillBody(id: string): string {
   return parseFrontmatter(readFileSync(path, 'utf8')).body
 }
 
-/** Lee el equipo configurado desde .agents/agent.config.json. */
+/** Lee el equipo configurado desde .tmp/agent.config.json. Vacío si no existe. */
 export function readTeam(): AgentConfig[] {
   if (!existsSync(TEAM_FILE)) return []
   try {
@@ -80,8 +84,9 @@ export function readTeam(): AgentConfig[] {
   }
 }
 
-/** Persiste el equipo en .agents/agent.config.json. */
+/** Persiste el equipo en .tmp/agent.config.json (crea la carpeta si falta). */
 export function writeTeam(agents: AgentConfig[]): void {
+  mkdirSync(TEAM_DIR, { recursive: true })
   writeFileSync(TEAM_FILE, JSON.stringify({ agents }, null, 2) + '\n', 'utf8')
 }
 

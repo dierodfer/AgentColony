@@ -73,18 +73,15 @@ make dev     # arranca la app
 agente se ejecuta como un proceso independiente `copilot -p`, lo que permite
 mezclar modelos y personas en la misma ronda.
 
-**Modelos disponibles** (flag `--model` de Copilot CLI, definidos en
-[`server/models.ts`](server/models.ts)):
+**Modelos disponibles:** la lista se obtiene de **Copilot CLI en tiempo de
+ejecución**, parseando la salida de `copilot help` (el flag `--model`) al
+arrancar el servidor. Así el selector refleja siempre los modelos reales de tu
+instalación, sin mantener una lista a mano.
 
-| Familia | Modelos |
-|---------|---------|
-| Auto | `auto` (Copilot elige) |
-| Claude | `claude-sonnet-4.6`, `claude-haiku-4.5`, `claude-opus-4.8` |
-| GPT-5.x | `gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.4-mini` |
-| Gemini | `gemini-3.1-pro`, `gemini-3.5-flash` |
-
-> La lista refleja los modelos del selector de `copilot`. Si Copilot CLI añade o
-> retira modelos, actualiza `server/models.ts`.
+> Si `copilot` no está disponible o cambia el formato de su ayuda, la app usa
+> una **lista de reserva** (`FALLBACK_MODELS` en
+> [`server/models.ts`](server/models.ts): `auto`, familias Claude / GPT-5.x /
+> Gemini) para no quedarse sin modelos.
 
 ## Cómo funciona
 
@@ -97,7 +94,7 @@ vite (un proceso)
  ├─ Frontend React + Tailwind (src/)
  └─ Plugin officeApiPlugin (server/)
      ├─ /api/models | /api/skills | /api/templates  (catálogos)
-     ├─ /api/agents  (CRUD del equipo → .agents/agent.config.json)
+     ├─ /api/agents  (CRUD del equipo → .tmp/agent.config.json)
      └─ /api/run     (POST con streaming NDJSON de una ronda)
 ```
 
@@ -116,12 +113,14 @@ aleatorio al nuevo agente.
 - **`.agents/*.md`** — plantillas de agente (persona). Frontmatter `name` +
   cuerpo markdown con las instrucciones.
 - **`.skills/*.md`** — skills reutilizables. Frontmatter `name` + cuerpo.
-- **`.agents/agent.config.json`** — el equipo actual, gestionado por la UI.
+- **`.tmp/agent.config.json`** — el equipo actual. Es **estado local en
+  runtime** (no se versiona): la app lo genera en `.tmp/` la primera vez que
+  creas un agente desde la UI.
 
 Las plantillas y skills se detectan automáticamente; la app no las modifica.
-Este repositorio incluye un conjunto **genérico** de ejemplo (`backend`,
-`frontend`, `qa`, `ux` y skills cortas) para que arranque con un equipo válido;
-añade los tuyos creando nuevos `.md`.
+Este repositorio incluye un conjunto **genérico** de ejemplo de plantillas
+(`backend`, `frontend`, `qa`, `ux`) y skills cortas; el equipo arranca **vacío**
+y lo construyes desde la pantalla de Agentes (o añade tus propios `.md`).
 
 ## Tarjetas de agente
 
@@ -138,12 +137,12 @@ Cada agente se muestra en una tarjeta con:
 ```
 AgentColony/
 ├─ .agents/            Plantillas de agente (persona) — *.md
-│  └─ agent.config.json  Equipo actual (gestionado por la UI)
 ├─ .skills/            Skills reutilizables — *.md
+├─ .tmp/               Estado local en runtime — agent.config.json (no versionado)
 ├─ server/             Plugin de Vite: API + orquestación de Copilot CLI
 │  ├─ vite-plugin.ts   Rutas /api/* y streaming NDJSON
 │  ├─ copilot-runner.ts  Lanza y traduce los procesos `copilot -p`
-│  ├─ models.ts        Catálogo de modelos
+│  ├─ models.ts        Catálogo de modelos (de `copilot help`, con fallback)
 │  └─ ...
 ├─ src/                Frontend React + Tailwind
 ├─ vite.config.ts

@@ -15,7 +15,7 @@ import {
   updateSkill,
   deleteSkill,
 } from './config-reader.ts'
-import { MODELS, isValidModel } from './models.ts'
+import { loadModels, isValidModel } from './models.ts'
 import { OfficeRunner } from './copilot-runner.ts'
 import { generateAgentTemplate, generateSkill } from './template-generator.ts'
 import type { AgentConfig, ServerMessage } from './types.ts'
@@ -80,6 +80,10 @@ export function officeApiPlugin(): Plugin {
   return {
     name: 'agent-colony-api',
     configureServer(server) {
+      // Calienta la caché de modelos (consulta `copilot help` una vez) para que
+      // /api/models y la validación de agentes respondan al instante.
+      void loadModels()
+
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? ''
         const method = req.method ?? 'GET'
@@ -89,7 +93,7 @@ export function officeApiPlugin(): Plugin {
 
         try {
           // ---- Catálogos ----
-          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, MODELS)
+          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, await loadModels())
           if (method === 'GET' && path === '/api/skills') return sendJson(res, 200, getSkills())
           if (method === 'GET' && path === '/api/templates') return sendJson(res, 200, getAgentTemplates())
 
@@ -195,6 +199,7 @@ export function officeApiPlugin(): Plugin {
             if (team.length >= MAX_AGENTS) {
               return sendJson(res, 400, { error: `Máximo ${MAX_AGENTS} agentes.` })
             }
+            await loadModels() // asegura que isValidModel valide contra la lista real
             const result = validateAgent(await readJson(req))
             if ('error' in result) return sendJson(res, 400, { error: result.error })
             const agent: AgentConfig = { id: randomUUID(), ...result.agent }
@@ -215,6 +220,7 @@ export function officeApiPlugin(): Plugin {
               res.writeHead(204).end()
               return
             }
+            await loadModels() // asegura que isValidModel valide contra la lista real
             const result = validateAgent(await readJson(req))
             if ('error' in result) return sendJson(res, 400, { error: result.error })
             team[idx] = { id, ...result.agent }

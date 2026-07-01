@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useOfficeData } from './hooks/useOfficeData'
 import { useOfficeRun } from './hooks/useOfficeRun'
 import { useHistory } from './hooks/useHistory'
@@ -32,6 +32,14 @@ export default function App() {
   const [view, setView] = useState<SectionId>('agentes')
   const [pendingPrompt, setPendingPrompt] = useState('')
 
+  // Modelo por defecto del formulario de creación: preferimos un "GPT mini" si
+  // Copilot lo ofrece; si no, el primero disponible. Se resuelve una vez
+  // consultados los modelos a Copilot y se guarda en esta variable de la vista.
+  const defaultModel = useMemo(() => {
+    const gptMini = data.models.find((m) => /gpt.*mini/i.test(m.id))
+    return gptMini?.id ?? data.models[0]?.id ?? 'auto'
+  }, [data.models])
+
   const handleAsk = (prompt: string) => {
     setQuestion(prompt)
     history.add(prompt)
@@ -59,7 +67,7 @@ export default function App() {
       name: freeName,
       avatar: freeAvatar,
       agentFile: data.templates[0]?.file ?? '',
-      model: data.models[0]?.id ?? 'auto',
+      model: defaultModel,
       skills: [],
     }
   }

@@ -4,6 +4,7 @@ import { useOfficeRun } from './hooks/useOfficeRun'
 import { useHistory } from './hooks/useHistory'
 import { HeroPrompt } from './components/HeroPrompt'
 import { AgentGrid } from './components/AgentGrid'
+import { AgentMapView } from './components/AgentMap/AgentMapView'
 import { TemplatesView } from './components/TemplatesView'
 import { Sidebar, type SectionId } from './components/Sidebar'
 import { AgentEditor } from './components/AgentEditor'
@@ -155,6 +156,20 @@ export default function App() {
               </div>
             )}
           </div>
+        </main>
+      )}
+
+      {view === 'mapa' && (
+        <main className="flex-1 overflow-hidden">
+          <AgentMapView
+            agents={data.agents}
+            runtime={runtime}
+            onAsk={handleAsk}
+            onCancel={cancel}
+            isRunning={isRunning}
+            disabled={data.agents.length === 0}
+            pendingPrompt={pendingPrompt}
+          />
         </main>
       )}
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-export type SectionId = 'agentes' | 'templates'
+export type SectionId = 'agentes' | 'templates' | 'mapa'
 
 function BrandMark() {
   return (
@@ -21,6 +21,17 @@ function AgentsIcon() {
       <rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
       <rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
       <rect x="9" y="9" width="4.5" height="4.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  )
+}
+
+function MapIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden>
+      <circle cx="4" cy="4.5" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="12.5" cy="5.5" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="7" cy="12" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 5.3L10.9 5.5M4.9 6.1L6.3 10.4M8.5 10.7L11.4 7" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   )
 }
@@ -136,6 +147,13 @@ export function Sidebar({
           active={active === 'agentes'}
           collapsed={collapsed}
           onClick={() => onNavigate('agentes')}
+        />
+        <NavItem
+          label="Mapa"
+          icon={<MapIcon />}
+          active={active === 'mapa'}
+          collapsed={collapsed}
+          onClick={() => onNavigate('mapa')}
         />
         <NavItem
           label="Templates & Skills"

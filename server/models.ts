@@ -1,27 +1,11 @@
 import { execFile } from 'node:child_process'
 import type { ModelOption } from './types.ts'
 
-// La lista de modelos se obtiene de Copilot CLI en tiempo de ejecución
-// (parseando `copilot help`), porque el CLI no expone un comando específico
-// para listarlos. Si el CLI no está disponible o cambia el formato, se usa la
-// lista de reserva (FALLBACK_MODELS) para que la app nunca se quede sin modelos.
-
-/** Lista de reserva: modelos verificados contra `copilot` 1.0.63. */
-export const FALLBACK_MODELS: ModelOption[] = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
-  { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5' },
-  { id: 'claude-opus-4.8', label: 'Claude Opus 4.8' },
-  { id: 'gpt-5.5', label: 'GPT-5.5' },
-  { id: 'gpt-5.4', label: 'GPT-5.4' },
-  { id: 'gpt-5.3-codex', label: 'GPT-5.3-Codex' },
-  { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
-  { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
-  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-]
-
-// Modelo por defecto para agentes nuevos (mientras no se configure otro).
-export const DEFAULT_MODEL = 'gpt-5.4-mini'
+// La lista de modelos se obtiene EXCLUSIVAMENTE de Copilot CLI en tiempo de
+// ejecución (parseando `copilot help`), porque el CLI no expone un comando
+// específico para listarlos. No hay lista por defecto: si Copilot no está
+// disponible, el selector queda vacío (la app depende de una instalación de
+// `copilot` autenticada para funcionar).
 
 const HELP_TIMEOUT_MS = 8_000
 
@@ -46,11 +30,12 @@ function labelFor(id: string): string {
  * Extrae los ids de modelo del texto de ayuda de Copilot CLI. Busca el bloque
  * de la opción `--model` (su descripción incluye los model strings) y, si no lo
  * encuentra, cae a escanear todo el texto por patrones de modelo conocidos.
+ * Solo devuelve lo que Copilot expone; no inyecta ningún modelo por defecto.
  * Exportada para poder testear el parseo sin ejecutar el CLI.
  */
 export function parseModelsFromHelp(help: string): ModelOption[] {
   const lines = help.split('\n')
-  const start = lines.findIndex((l) => /(^|\s)-?-?model\b/.test(l) && /--model/.test(l))
+  const start = lines.findIndex((l) => /--model/.test(l))
 
   let scope = help
   if (start !== -1) {
@@ -77,9 +62,8 @@ export function parseModelsFromHelp(help: string): ModelOption[] {
   }
 
   const models = ids.map((id) => ({ id, label: labelFor(id) }))
-  // Garantiza que "auto" esté disponible y primero.
-  if (!seen.has('auto')) models.unshift({ id: 'auto', label: 'Auto' })
-  else models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
+  // Si Copilot ofrece "auto", lo mostramos primero (es la opción recomendada).
+  models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
   return models
 }
 
@@ -93,26 +77,29 @@ function runCopilotHelp(): Promise<string | null> {
   })
 }
 
-// Cache a nivel de módulo: los modelos no cambian durante la sesión, así que
-// solo consultamos a Copilot una vez por arranque del servidor.
+// Cache a nivel de módulo: los modelos no cambian durante la sesión. Solo
+// cacheamos un resultado no vacío, para reintentar si Copilot no respondió.
 let cachedModels: ModelOption[] | null = null
 let loadPromise: Promise<ModelOption[]> | null = null
-let modelIdSet = new Set(FALLBACK_MODELS.map((m) => m.id))
+let modelIdSet = new Set<string>()
 
 /**
- * Resuelve la lista de modelos desde Copilot CLI (cacheada). Cae a
- * FALLBACK_MODELS si el CLI no está disponible o no se pudo parsear ninguno.
+ * Resuelve la lista de modelos desde Copilot CLI (cacheada). Devuelve [] si el
+ * CLI no está disponible o no se pudo parsear ningún modelo (sin lista de
+ * reserva: la app requiere `copilot`).
  */
 export function loadModels(): Promise<ModelOption[]> {
   if (cachedModels) return Promise.resolve(cachedModels)
   if (loadPromise) return loadPromise
   loadPromise = (async () => {
     const help = await runCopilotHelp()
-    const parsed = help ? parseModelsFromHelp(help) : []
-    // Necesitamos algo más que solo "auto" para considerar el parseo válido.
-    const models = parsed.filter((m) => m.id !== 'auto').length > 0 ? parsed : FALLBACK_MODELS
-    cachedModels = models
-    modelIdSet = new Set(models.map((m) => m.id))
+    const models = help ? parseModelsFromHelp(help) : []
+    if (models.length > 0) {
+      cachedModels = models
+      modelIdSet = new Set(models.map((m) => m.id))
+    } else {
+      loadPromise = null // no cachear vacío: permite reintentar en la próxima llamada
+    }
     return models
   })()
   return loadPromise
@@ -120,7 +107,7 @@ export function loadModels(): Promise<ModelOption[]> {
 
 /**
  * ¿Es un id de modelo válido y seleccionable? Comprueba contra la lista
- * resuelta (o la de reserva si aún no se ha cargado).
+ * resuelta de Copilot (vacía hasta que se cargue o si `copilot` no está).
  */
 export function isValidModel(id: string): boolean {
   return modelIdSet.has(id)

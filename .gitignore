@@ -27,8 +27,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Plantillas/skills extensas y específicas (no se publican; locales del autor).
-# El repo solo incluye un conjunto genérico de ejemplo.
-.agents/software-architect-advisor.md
-.agents/java-clean-architecture-engineer.md
-.skills/spring-boot-java-backend-engineering.md
+# Plantillas de agente y skills: son contenido local del usuario, no se
+# versionan. La app las detecta/gestiona en runtime (crea las carpetas si faltan).
+.agents/
+.skills/

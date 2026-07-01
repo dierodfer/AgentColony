@@ -73,15 +73,14 @@ make dev     # arranca la app
 agente se ejecuta como un proceso independiente `copilot -p`, lo que permite
 mezclar modelos y personas en la misma ronda.
 
-**Modelos disponibles:** la lista se obtiene de **Copilot CLI en tiempo de
-ejecución**, parseando la salida de `copilot help` (el flag `--model`) al
-arrancar el servidor. Así el selector refleja siempre los modelos reales de tu
-instalación, sin mantener una lista a mano.
+**Modelos disponibles:** la lista se obtiene **exclusivamente de Copilot CLI**
+en tiempo de ejecución, parseando la salida de `copilot help` (el flag
+`--model`) al arrancar el servidor ([`server/models.ts`](server/models.ts)). El
+selector refleja siempre los modelos reales de tu instalación; **no hay lista
+por defecto**.
 
-> Si `copilot` no está disponible o cambia el formato de su ayuda, la app usa
-> una **lista de reserva** (`FALLBACK_MODELS` en
-> [`server/models.ts`](server/models.ts): `auto`, familias Claude / GPT-5.x /
-> Gemini) para no quedarse sin modelos.
+> Si `copilot` no está disponible o autenticado, el selector de modelos aparece
+> vacío: la app requiere una instalación de `copilot` funcional para operar.
 
 ## Cómo funciona
 
@@ -117,10 +116,11 @@ aleatorio al nuevo agente.
   runtime** (no se versiona): la app lo genera en `.tmp/` la primera vez que
   creas un agente desde la UI.
 
-Las plantillas y skills se detectan automáticamente; la app no las modifica.
-Este repositorio incluye un conjunto **genérico** de ejemplo de plantillas
-(`backend`, `frontend`, `qa`, `ux`) y skills cortas; el equipo arranca **vacío**
-y lo construyes desde la pantalla de Agentes (o añade tus propios `.md`).
+Todo esto es **contenido local del usuario y no se versiona** (`.agents/`,
+`.skills/` y `.tmp/` están en `.gitignore`). Un clon nuevo arranca sin
+plantillas, skills ni equipo: los creas desde la UI (que escribe los `.md` en
+`.agents/`/`.skills/` y el equipo en `.tmp/`, creando las carpetas si faltan) o
+añadiendo tus propios `.md`. La app las detecta automáticamente.
 
 ## Tarjetas de agente
 
@@ -135,14 +135,14 @@ Cada agente se muestra en una tarjeta con:
 ## Estructura del proyecto
 
 ```
-AgentColony/
-├─ .agents/            Plantillas de agente (persona) — *.md
-├─ .skills/            Skills reutilizables — *.md
-├─ .tmp/               Estado local en runtime — agent.config.json (no versionado)
+AgentColony/                (·) = local, no versionado (.gitignore)
+├─ .agents/ (·)        Plantillas de agente (persona) — *.md
+├─ .skills/ (·)        Skills reutilizables — *.md
+├─ .tmp/    (·)        Estado local en runtime — agent.config.json
 ├─ server/             Plugin de Vite: API + orquestación de Copilot CLI
 │  ├─ vite-plugin.ts   Rutas /api/* y streaming NDJSON
 │  ├─ copilot-runner.ts  Lanza y traduce los procesos `copilot -p`
-│  ├─ models.ts        Catálogo de modelos (de `copilot help`, con fallback)
+│  ├─ models.ts        Modelos (de `copilot help`, sin lista por defecto)
 │  └─ ...
 ├─ src/                Frontend React + Tailwind
 ├─ vite.config.ts

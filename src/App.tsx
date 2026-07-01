@@ -13,7 +13,6 @@ import { ACCENTS } from './components/AgentIdentity'
 import type { AgentConfig, AgentDraft, AgentStatus } from './types'
 
 const MAX_AGENTS = 8
-const DEFAULT_MODEL = 'gpt-5.4-mini'
 const AGENT_NAMES = [
   'Neon', 'Cipher', 'Vortex', 'Specter', 'Raven', 'Onyx', 'Nyx', 'Quasar',
   'Helix', 'Pulsar', 'Glitch', 'Cobalt', 'Aether', 'Zenith', 'Krypt', 'Vesper',
@@ -60,7 +59,7 @@ export default function App() {
       name: freeName,
       avatar: freeAvatar,
       agentFile: data.templates[0]?.file ?? '',
-      model: data.models.some((m) => m.id === DEFAULT_MODEL) ? DEFAULT_MODEL : (data.models[0]?.id ?? 'auto'),
+      model: data.models[0]?.id ?? 'auto',
       skills: [],
     }
   }

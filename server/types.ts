@@ -24,6 +24,14 @@ export interface SkillInfo {
   id: string
   /** Nombre legible (frontmatter `name` o el id capitalizado). */
   name: string
+  /**
+   * Patrones glob (frontmatter `applyTo`, separados por comas) que indican a
+   * qué archivos aplica la skill, p.ej. "**\/*.java, **\/pom.xml". Mismo
+   * campo que usa GitHub Copilot para instrucciones específicas de path.
+   * Metadata informativa: no filtra automáticamente, es guía para quien arma
+   * el equipo.
+   */
+  applyTo?: string
 }
 
 /** Plantilla de agente detectada en .agents/*.md */

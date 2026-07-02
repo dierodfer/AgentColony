@@ -83,7 +83,7 @@ export function useOfficeData() {
   }, [])
 
   const createSkill = useCallback(
-    async (data: { name: string; body?: string }) => {
+    async (data: { name: string; body?: string; applyTo?: string }) => {
       const skill = await api.createSkill(data)
       await reloadCatalogs()
       return skill

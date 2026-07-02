@@ -97,6 +97,12 @@ agente viven en **`.agents/*.md`** y los skills reutilizables en **`.skills/*.md
 (ambos trackeados en git). El equipo actual se guarda en **`.tmp/agent.config.json`**
 (no versionado). Detecta y carga `.md` automáticamente.
 
+Las skills soportan un campo opcional **`applyTo`** en el frontmatter (mismo
+estándar que usa GitHub Copilot para instrucciones específicas de path):
+patrones glob separados por comas que indican a qué archivos aplica, p.ej.
+`applyTo: "**/*.java, **/pom.xml"`. Es metadata informativa — no filtra
+automáticamente, es una guía visible en la UI al armar el equipo.
+
 ## Estructura
 
 - **`.agents/`** — plantillas de agente (`.md`)

@@ -121,10 +121,10 @@ export function officeApiPlugin(): Plugin {
 
           // ---- Crear skill / plantilla (escriben en .skills/ y .agents/) ----
           if (method === 'POST' && path === '/api/skills') {
-            const b = (await readJson(req)) as { name?: string; body?: string }
+            const b = (await readJson(req)) as { name?: string; body?: string; applyTo?: string }
             if (!b.name?.trim()) return sendJson(res, 400, { error: 'El nombre es obligatorio.' })
             try {
-              return sendJson(res, 201, createSkill(b.name, b.body ?? ''))
+              return sendJson(res, 201, createSkill(b.name, b.body ?? '', b.applyTo))
             } catch (e) {
               return sendJson(res, 400, { error: (e as Error).message })
             }
@@ -182,10 +182,10 @@ export function officeApiPlugin(): Plugin {
             const id = decodeURIComponent(skillMatch[1])
             if (method === 'GET') return sendJson(res, 200, { body: getSkillBody(id) })
             if (method === 'PUT') {
-              const b = (await readJson(req)) as { name?: string; body?: string }
+              const b = (await readJson(req)) as { name?: string; body?: string; applyTo?: string }
               if (!b.name?.trim()) return sendJson(res, 400, { error: 'El nombre es obligatorio.' })
               try {
-                return sendJson(res, 200, updateSkill(id, b.name, b.body ?? ''))
+                return sendJson(res, 200, updateSkill(id, b.name, b.body ?? '', b.applyTo))
               } catch (e) {
                 return sendJson(res, 400, { error: (e as Error).message })
               }

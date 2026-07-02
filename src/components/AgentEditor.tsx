@@ -23,7 +23,7 @@ interface Props {
   takenAvatars: string[]
   onCancel: () => void
   onSave: (draft: AgentDraft) => void
-  onCreateSkill: (data: { name: string; body?: string }) => Promise<SkillInfo>
+  onCreateSkill: (data: { name: string; body?: string; applyTo?: string }) => Promise<SkillInfo>
   onCreateTemplate: (data: { name: string; body?: string }) => Promise<AgentTemplate>
 }
 
@@ -141,7 +141,7 @@ export function AgentEditor({
     const newName = pool[Math.floor(Math.random() * pool.length)]
     setDraft((d) => ({ ...d, avatar: newAvatar, name: newName }))
   }
-  const [newSkill, setNewSkill] = useState<{ name: string; body: string } | null>(null)
+  const [newSkill, setNewSkill] = useState<{ name: string; body: string; applyTo: string } | null>(null)
   const [newTemplate, setNewTemplate] = useState<{ name: string; body: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -177,7 +177,7 @@ export function AgentEditor({
     setBusy(true)
     setError(null)
     try {
-      const created = await onCreateSkill({ name: newSkill.name, body: newSkill.body })
+      const created = await onCreateSkill({ name: newSkill.name, body: newSkill.body, applyTo: newSkill.applyTo })
       setDraft((d) => ({ ...d, skills: [...d.skills, created.id] }))
       setNewSkill(null)
     } catch (e) {
@@ -346,7 +346,7 @@ export function AgentEditor({
         <div className="mb-2 flex items-center justify-between">
           <label className={labelCls + ' mb-0'}>Skills</label>
           <button
-            onClick={() => setNewSkill({ name: '', body: '' })}
+            onClick={() => setNewSkill({ name: '', body: '', applyTo: '' })}
             className="text-xs font-medium text-accent transition-colors hover:text-accent-strong"
           >
             + Nueva
@@ -360,6 +360,7 @@ export function AgentEditor({
               <button
                 key={s.id}
                 onClick={() => toggleSkill(s.id)}
+                title={s.applyTo ? `Aplica a: ${s.applyTo}` : undefined}
                 className={`rounded-lg px-3 py-1 text-sm font-medium transition-colors ${
                   on
                     ? 'bg-accent text-white'
@@ -386,6 +387,12 @@ export function AgentEditor({
               value={newSkill.name}
               onChange={(e) => setNewSkill((s) => s && { ...s, name: e.target.value })}
               className={fieldCls}
+            />
+            <input
+              placeholder="Aplica a (glob, opcional): **/*.java, **/pom.xml"
+              value={newSkill.applyTo}
+              onChange={(e) => setNewSkill((s) => s && { ...s, applyTo: e.target.value })}
+              className={`font-mono ${fieldCls}`}
             />
             <textarea
               placeholder="Contenido de la skill (opcional)"

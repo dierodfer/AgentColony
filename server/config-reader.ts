@@ -53,7 +53,7 @@ export function getSkills(): SkillInfo[] {
   return listMarkdown(SKILLS_DIR).map((file) => {
     const { meta } = parseFrontmatter(readFileSync(join(SKILLS_DIR, file), 'utf8'))
     const id = file.replace(/\.md$/, '')
-    return { id, name: meta.name || titleize(id) }
+    return { id, name: meta.name || titleize(id), applyTo: meta.applyTo || undefined }
   })
 }
 
@@ -108,11 +108,19 @@ function yamlValue(value: string): string {
   return `"${value.replace(/"/g, '\\"')}"`
 }
 
+/** Construye el frontmatter YAML de una skill, incluyendo `applyTo` si se indica. */
+function skillFrontmatter(name: string, applyTo: string | undefined): string {
+  const lines = [`name: ${yamlValue(name)}`]
+  if (applyTo?.trim()) lines.push(`applyTo: ${yamlValue(applyTo.trim())}`)
+  return `---\n${lines.join('\n')}\n---\n`
+}
+
 /**
  * Crea una nueva skill en .skills/<slug>.md. Lanza si el nombre es inválido o
- * el archivo ya existe.
+ * el archivo ya existe. `applyTo` es opcional: patrones glob separados por
+ * comas (p.ej. "**\/*.java, **\/pom.xml") que indican a qué archivos aplica.
  */
-export function createSkill(name: string, body: string): SkillInfo {
+export function createSkill(name: string, body: string, applyTo?: string): SkillInfo {
   const trimmed = name.trim()
   const slug = slugify(trimmed)
   if (!slug) throw new Error('Nombre de skill inválido.')
@@ -121,9 +129,9 @@ export function createSkill(name: string, body: string): SkillInfo {
   const path = join(SKILLS_DIR, `${slug}.md`)
   if (existsSync(path)) throw new Error(`Ya existe una skill "${slug}".`)
 
-  const content = `---\nname: ${yamlValue(trimmed)}\n---\n\n${body.trim() || trimmed}\n`
+  const content = `${skillFrontmatter(trimmed, applyTo)}\n${body.trim() || trimmed}\n`
   writeFileSync(path, content, 'utf8')
-  return { id: slug, name: trimmed }
+  return { id: slug, name: trimmed, applyTo: applyTo?.trim() || undefined }
 }
 
 /**
@@ -164,15 +172,15 @@ export function deleteTemplate(file: string): void {
   unlinkSync(path)
 }
 
-/** Actualiza una skill existente. */
-export function updateSkill(id: string, name: string, body: string): SkillInfo {
+/** Actualiza una skill existente (incluyendo su `applyTo` opcional). */
+export function updateSkill(id: string, name: string, body: string, applyTo?: string): SkillInfo {
   const safe = basename(id).replace(/\.md$/, '')
   const path = join(SKILLS_DIR, `${safe}.md`)
   if (!existsSync(path)) throw new Error(`Skill "${safe}" no encontrada.`)
   const n = name.trim()
-  const content = `---\nname: ${yamlValue(n)}\n---\n\n${body.trim()}\n`
+  const content = `${skillFrontmatter(n, applyTo)}\n${body.trim()}\n`
   writeFileSync(path, content, 'utf8')
-  return { id: safe, name: n }
+  return { id: safe, name: n, applyTo: applyTo?.trim() || undefined }
 }
 
 /** Elimina una skill del disco. */

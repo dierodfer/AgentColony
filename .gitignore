@@ -27,7 +27,3 @@ dist-ssr
 *.sln
 *.sw?
 
-# Plantillas de agente y skills: son contenido local del usuario, no se
-# versionan. La app las detecta/gestiona en runtime (crea las carpetas si faltan).
-.agents/
-.skills/

@@ -197,6 +197,7 @@ export default function App() {
             : newDraft()}
           isNew={editing.mode === 'new'}
           models={data.models}
+          onReloadModels={data.refreshModels}
           skills={data.skills}
           templates={data.templates}
           takenNames={data.agents

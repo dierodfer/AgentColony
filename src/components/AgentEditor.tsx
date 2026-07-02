@@ -13,6 +13,8 @@ interface Props {
   initial: AgentDraft
   isNew: boolean
   models: ModelOption[]
+  /** Recarga los modelos desde Copilot (`/model`) y devuelve la nueva lista. */
+  onReloadModels: () => Promise<ModelOption[]>
   skills: SkillInfo[]
   templates: AgentTemplate[]
   /** Nombres (lowercase) de OTROS agentes — no se pueden repetir. */
@@ -116,6 +118,7 @@ export function AgentEditor({
   initial,
   isNew,
   models,
+  onReloadModels,
   skills,
   templates,
   takenNames,
@@ -142,6 +145,26 @@ export function AgentEditor({
   const [newTemplate, setNewTemplate] = useState<{ name: string; body: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadingModels, setLoadingModels] = useState(false)
+
+  const reloadModels = async () => {
+    setLoadingModels(true)
+    setError(null)
+    try {
+      const list = await onReloadModels()
+      // Si el modelo actual quedó fuera de la nueva lista, elige un GPT mini si
+      // lo hay; si no, el primero disponible.
+      setDraft((d) =>
+        list.some((m) => m.id === d.model)
+          ? d
+          : { ...d, model: list.find((m) => /gpt.*mini/i.test(m.id))?.id ?? list[0]?.id ?? d.model },
+      )
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setLoadingModels(false)
+    }
+  }
 
   const toggleSkill = (id: string) =>
     setDraft((d) => ({
@@ -225,18 +248,44 @@ export function AgentEditor({
         )}
 
         {/* Modelo */}
-        <label className={labelCls}>Modelo</label>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label className={labelCls.replace('mb-1.5 ', '')}>Modelo</label>
+          <button
+            type="button"
+            onClick={reloadModels}
+            disabled={loadingModels}
+            title="Recargar modelos desde Copilot (/model)"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:border-line-strong hover:text-white/85 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className={loadingModels ? 'inline-block animate-spin' : 'inline-block'}>
+              <ReloadIcon />
+            </span>
+            {loadingModels ? 'Recargando…' : 'Recargar modelos'}
+          </button>
+        </div>
         <select
           value={draft.model}
           onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}
-          className={`mb-4 ${fieldCls}`}
+          disabled={models.length === 0}
+          className={`mb-1 ${fieldCls} disabled:cursor-not-allowed disabled:opacity-60`}
         >
+          {models.length === 0 && (
+            <option value={draft.model} className="bg-elevated">
+              {draft.model || 'Sin modelos — pulsa «Recargar modelos»'}
+            </option>
+          )}
           {models.map((m) => (
             <option key={m.id} value={m.id} className="bg-elevated">
               {m.label}
             </option>
           ))}
         </select>
+        {models.length === 0 && (
+          <p className="mb-4 text-[11px] text-white/35">
+            Los modelos se obtienen de Copilot al pulsar «Recargar modelos».
+          </p>
+        )}
+        {models.length > 0 && <div className="mb-4" />}
 
         {/* Agentes Plantilla */}
         <div className="mb-2 flex items-center justify-between">

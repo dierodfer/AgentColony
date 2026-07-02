@@ -73,14 +73,16 @@ make dev     # arranca la app
 agente se ejecuta como un proceso independiente `copilot -p`, lo que permite
 mezclar modelos y personas en la misma ronda.
 
-**Modelos disponibles:** la lista se obtiene **exclusivamente de Copilot CLI**
-en tiempo de ejecución, parseando la salida de `copilot help` (el flag
-`--model`) al arrancar el servidor ([`server/models.ts`](server/models.ts)). El
-selector refleja siempre los modelos reales de tu instalación; **no hay lista
-por defecto**.
+**Modelos disponibles:** la lista se obtiene **de Copilot CLI y bajo demanda**.
+En el formulario de agente hay un botón **«Recargar modelos»** que ejecuta el
+slash-command `/model` dentro de `copilot` (así es como el CLI lista los
+modelos) y rellena el selector con lo que devuelve
+([`server/models.ts`](server/models.ts)). No se consulta automáticamente al
+arrancar: el selector empieza **vacío** hasta que pulsas el botón, y la lista
+resuelta se cachea durante la sesión.
 
-> Si `copilot` no está disponible o autenticado, el selector de modelos aparece
-> vacío: la app requiere una instalación de `copilot` funcional para operar.
+> Requiere una instalación de `copilot` funcional y autenticada. Si falla, el
+> botón muestra el error y el selector queda vacío; **no hay lista por defecto**.
 
 ## Cómo funciona
 
@@ -142,7 +144,7 @@ AgentColony/                (·) = local, no versionado (.gitignore)
 ├─ server/             Plugin de Vite: API + orquestación de Copilot CLI
 │  ├─ vite-plugin.ts   Rutas /api/* y streaming NDJSON
 │  ├─ copilot-runner.ts  Lanza y traduce los procesos `copilot -p`
-│  ├─ models.ts        Modelos (de `copilot help`, sin lista por defecto)
+│  ├─ models.ts        Modelos (recarga bajo demanda vía `copilot` /model)
 │  └─ ...
 ├─ src/                Frontend React + Tailwind
 ├─ vite.config.ts

@@ -15,7 +15,7 @@ import {
   updateSkill,
   deleteSkill,
 } from './config-reader.ts'
-import { loadModels, isValidModel } from './models.ts'
+import { getModels, isValidModel, refreshModels } from './models.ts'
 import { OfficeRunner } from './copilot-runner.ts'
 import { generateAgentTemplate, generateSkill } from './template-generator.ts'
 import type { AgentConfig, ServerMessage } from './types.ts'
@@ -62,7 +62,12 @@ function validateAgent(body: unknown): { agent: Omit<AgentConfig, 'id'> } | { er
   }
 
   const model = typeof b?.model === 'string' ? b.model : ''
-  if (!isValidModel(model)) return { error: `El modelo "${model}" no es válido.` }
+  if (!model) return { error: 'El modelo es obligatorio.' }
+  // Solo validamos contra el catálogo si ya se han recargado modelos; si aún no
+  // (caché vacía), aceptamos cualquier id para no bloquear edición de agentes.
+  if (getModels().length > 0 && !isValidModel(model)) {
+    return { error: `El modelo "${model}" no es válido.` }
+  }
 
   const validSkills = new Set(getSkills().map((s) => s.id))
   const skills = Array.isArray(b?.skills)
@@ -80,10 +85,6 @@ export function officeApiPlugin(): Plugin {
   return {
     name: 'agent-colony-api',
     configureServer(server) {
-      // Calienta la caché de modelos (consulta `copilot help` una vez) para que
-      // /api/models y la validación de agentes respondan al instante.
-      void loadModels()
-
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? ''
         const method = req.method ?? 'GET'
@@ -93,8 +94,17 @@ export function officeApiPlugin(): Plugin {
 
         try {
           // ---- Catálogos ----
-          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, await loadModels())
+          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, getModels())
           if (method === 'GET' && path === '/api/skills') return sendJson(res, 200, getSkills())
+
+          // ---- Recargar modelos desde Copilot (/model), bajo demanda ----
+          if (method === 'POST' && path === '/api/models/refresh') {
+            try {
+              return sendJson(res, 200, await refreshModels())
+            } catch (e) {
+              return sendJson(res, 502, { error: (e as Error).message })
+            }
+          }
           if (method === 'GET' && path === '/api/templates') return sendJson(res, 200, getAgentTemplates())
 
           // ---- Generar skill con IA ----
@@ -199,7 +209,6 @@ export function officeApiPlugin(): Plugin {
             if (team.length >= MAX_AGENTS) {
               return sendJson(res, 400, { error: `Máximo ${MAX_AGENTS} agentes.` })
             }
-            await loadModels() // asegura que isValidModel valide contra la lista real
             const result = validateAgent(await readJson(req))
             if ('error' in result) return sendJson(res, 400, { error: result.error })
             const agent: AgentConfig = { id: randomUUID(), ...result.agent }
@@ -220,7 +229,6 @@ export function officeApiPlugin(): Plugin {
               res.writeHead(204).end()
               return
             }
-            await loadModels() // asegura que isValidModel valide contra la lista real
             const result = validateAgent(await readJson(req))
             if ('error' in result) return sendJson(res, 400, { error: result.error })
             team[idx] = { id, ...result.agent }

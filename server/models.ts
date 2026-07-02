@@ -1,17 +1,22 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import type { ModelOption } from './types.ts'
 
-// La lista de modelos se obtiene EXCLUSIVAMENTE de Copilot CLI en tiempo de
-// ejecución (parseando `copilot help`), porque el CLI no expone un comando
-// específico para listarlos. No hay lista por defecto: si Copilot no está
-// disponible, el selector queda vacío (la app depende de una instalación de
-// `copilot` autenticada para funcionar).
+// Los modelos se obtienen ejecutando el slash-command `/model` dentro de
+// Copilot CLI (así es como el CLI los lista). NO se consulta automáticamente:
+// solo bajo demanda desde el botón "Recargar modelos" del formulario de agente
+// (endpoint POST /api/models/refresh). La lista resuelta se cachea en memoria
+// durante la sesión del servidor.
 
-const HELP_TIMEOUT_MS = 8_000
+const REFRESH_TIMEOUT_MS = 12_000
 
 // Familias de modelos conocidas de Copilot CLI. El grupo captura el id completo
 // (familia + versión + sufijo), permitiendo puntos y guiones internos.
 const MODEL_ID_RE = /\b((?:claude|gpt|gemini|grok)-[a-z0-9][a-z0-9.-]*|o[0-9][a-z0-9.-]*|auto)\b/gi
+
+// Secuencias ANSI (colores, movimientos de cursor) que emite la TUI de Copilot.
+// Se construye sin carácter de control literal para no disparar no-control-regex.
+const ANSI_RE = new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[ -/]*[@-~]', 'g')
+const ESC = String.fromCharCode(27)
 
 /** Genera una etiqueta legible a partir de un id de modelo. */
 function labelFor(id: string): string {
@@ -27,88 +32,96 @@ function labelFor(id: string): string {
 }
 
 /**
- * Extrae los ids de modelo del texto de ayuda de Copilot CLI. Busca el bloque
- * de la opción `--model` (su descripción incluye los model strings) y, si no lo
- * encuentra, cae a escanear todo el texto por patrones de modelo conocidos.
- * Solo devuelve lo que Copilot expone; no inyecta ningún modelo por defecto.
- * Exportada para poder testear el parseo sin ejecutar el CLI.
+ * Extrae los ids de modelo de la salida del comando `/model` de Copilot,
+ * limpiando primero los códigos ANSI de la TUI. Exportada para testear el
+ * parseo sin ejecutar el CLI.
  */
-export function parseModelsFromHelp(help: string): ModelOption[] {
-  const lines = help.split('\n')
-  const start = lines.findIndex((l) => /--model/.test(l))
-
-  let scope = help
-  if (start !== -1) {
-    // Toma la línea de --model y las siguientes de continuación (indentadas o de
-    // descripción) hasta la próxima opción (línea que empieza por '-') o un hueco.
-    const block: string[] = [lines[start]]
-    for (let i = start + 1; i < lines.length; i++) {
-      const l = lines[i]
-      if (/^\s*-{1,2}\w/.test(l) || l.trim() === '') break
-      block.push(l)
-    }
-    scope = block.join('\n')
-  }
-
+export function parseModelsFromOutput(raw: string): ModelOption[] {
+  const text = raw.replace(ANSI_RE, '')
   const ids: string[] = []
   const seen = new Set<string>()
-  for (const m of scope.matchAll(MODEL_ID_RE)) {
-    let id = m[1].toLowerCase().replace(/[.,;]+$/, '') // limpia puntuación final
-    if (id.endsWith('.')) id = id.slice(0, -1)
+  for (const m of text.matchAll(MODEL_ID_RE)) {
+    const id = m[1].toLowerCase().replace(/[.,;]+$/, '')
     if (!seen.has(id)) {
       seen.add(id)
       ids.push(id)
     }
   }
-
   const models = ids.map((id) => ({ id, label: labelFor(id) }))
-  // Si Copilot ofrece "auto", lo mostramos primero (es la opción recomendada).
+  // Si Copilot ofrece "auto", lo mostramos primero (opción recomendada).
   models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
   return models
 }
 
-/** Ejecuta `copilot help` y devuelve su salida, o null si falla. */
-function runCopilotHelp(): Promise<string | null> {
-  return new Promise((resolve) => {
-    execFile('copilot', ['help'], { timeout: HELP_TIMEOUT_MS }, (err, stdout, stderr) => {
-      if (err && !stdout && !stderr) return resolve(null)
-      resolve((stdout || '') + '\n' + (stderr || ''))
-    })
+// Cache en memoria: se rellena al pulsar "Recargar modelos". Vacío al arrancar.
+let cachedModels: ModelOption[] = []
+let modelIdSet = new Set<string>()
+
+/** Modelos resueltos en la última recarga (vacío hasta la primera). */
+export function getModels(): ModelOption[] {
+  return cachedModels
+}
+
+/** ¿Es un id de modelo válido y seleccionable (según la última recarga)? */
+export function isValidModel(id: string): boolean {
+  return modelIdSet.has(id)
+}
+
+/**
+ * Lanza `copilot`, ejecuta el slash-command `/model` para que liste los modelos
+ * disponibles, y devuelve la salida cruda (con ANSI). Resuelve con lo capturado
+ * al cerrar el proceso o al agotar el timeout; rechaza si `copilot` no se pudo
+ * ejecutar y no produjo salida alguna.
+ */
+function runModelCommand(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('copilot', [], { stdio: ['pipe', 'pipe', 'pipe'] })
+
+    let out = ''
+    let settled = false
+    const finish = (err?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (!child.killed) child.kill('SIGTERM')
+      if (err && !out) reject(err)
+      else resolve(out)
+    }
+
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (c: string) => (out += c))
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (c: string) => (out += c))
+    child.on('error', (err) => finish(new Error(`No se pudo ejecutar copilot: ${err.message}`)))
+    child.on('close', () => finish())
+
+    const timer = setTimeout(() => finish(), REFRESH_TIMEOUT_MS)
+
+    // Abre el selector de modelos y, tras dar tiempo a que lo pinte, cierra el
+    // selector (ESC) y sale del REPL para que el proceso termine y volquemos out.
+    const write = (s: string) => {
+      try {
+        child.stdin.write(s)
+      } catch {
+        /* stdin pudo cerrarse si copilot no arrancó; el handler 'error' lo cubre */
+      }
+    }
+    write('/model\n')
+    setTimeout(() => {
+      write(ESC)
+      write('/exit\n')
+    }, 1800)
   })
 }
 
-// Cache a nivel de módulo: los modelos no cambian durante la sesión. Solo
-// cacheamos un resultado no vacío, para reintentar si Copilot no respondió.
-let cachedModels: ModelOption[] | null = null
-let loadPromise: Promise<ModelOption[]> | null = null
-let modelIdSet = new Set<string>()
-
 /**
- * Resuelve la lista de modelos desde Copilot CLI (cacheada). Devuelve [] si el
- * CLI no está disponible o no se pudo parsear ningún modelo (sin lista de
- * reserva: la app requiere `copilot`).
+ * Recarga los modelos desde Copilot (`/model`), actualiza la caché y devuelve
+ * la lista. Puede devolver [] si no se pudo parsear ningún modelo.
  */
-export function loadModels(): Promise<ModelOption[]> {
-  if (cachedModels) return Promise.resolve(cachedModels)
-  if (loadPromise) return loadPromise
-  loadPromise = (async () => {
-    const help = await runCopilotHelp()
-    const models = help ? parseModelsFromHelp(help) : []
-    if (models.length > 0) {
-      cachedModels = models
-      modelIdSet = new Set(models.map((m) => m.id))
-    } else {
-      loadPromise = null // no cachear vacío: permite reintentar en la próxima llamada
-    }
-    return models
-  })()
-  return loadPromise
-}
-
-/**
- * ¿Es un id de modelo válido y seleccionable? Comprueba contra la lista
- * resuelta de Copilot (vacía hasta que se cargue o si `copilot` no está).
- */
-export function isValidModel(id: string): boolean {
-  return modelIdSet.has(id)
+export async function refreshModels(): Promise<ModelOption[]> {
+  const output = await runModelCommand()
+  const models = parseModelsFromOutput(output)
+  cachedModels = models
+  modelIdSet = new Set(models.map((m) => m.id))
+  return models
 }

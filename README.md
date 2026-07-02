@@ -67,6 +67,29 @@ eventos en tiempo real. El servidor lanza un proceso `copilot -p` por agente y
 traduce sus respuestas a estados (`thinking → responding → finished`/`error`).
 Cancelar detiene los procesos automáticamente.
 
+### Flujo de ejecución
+
+```mermaid
+graph TD
+    A["👤 Usuario escribe consulta"] --> B["📤 POST /api/run + listaAgentes"]
+    B --> C["🔀 Backend recibe consulta"]
+    C --> D{"Para cada agente"}
+    D --> E["🚀 Lanza copilot -p"]
+    E --> F["💭 Copilot procesa\n+prompt del agente\n+skills"]
+    F --> G["📡 Streaming JSONL\ncopilot → servidor"]
+    G --> H["🔄 Servidor traduce eventos"]
+    H --> I["starting\nthinking\nresponding"]
+    I --> J["📊 Streaming NDJSON\nservidor → navegador"]
+    J --> K["🎨 Frontend actualiza\nUI en tiempo real"]
+    K --> L["✅ Agente termina"]
+    L --> M["📝 Respuesta final\nvisible al usuario"]
+    N["⏹️ Usuario cancela"] --> O["🛑 AbortController\nmata procesos"]
+    style A fill:#1e293b
+    style K fill:#3b82f6
+    style M fill:#10b981
+    style O fill:#ef4444
+```
+
 ## Configuración de agentes
 
 Crea, edita y elimina especialistas desde la UI (hasta 8). Las plantillas de

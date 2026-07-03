@@ -75,8 +75,15 @@ export function useOfficeData() {
     [reloadAgents],
   )
 
+  // Recarga la lista de modelos desde Copilot (bajo demanda, no automático).
+  const refreshModels = useCallback(async () => {
+    const list = await api.refreshModels()
+    setModels(list)
+    return list
+  }, [])
+
   const createSkill = useCallback(
-    async (data: { name: string; body?: string }) => {
+    async (data: { name: string; body?: string; applyTo?: string }) => {
       const skill = await api.createSkill(data)
       await reloadCatalogs()
       return skill
@@ -101,6 +108,7 @@ export function useOfficeData() {
     loading,
     error,
     reloadCatalogs,
+    refreshModels,
     createAgent,
     updateAgent,
     deleteAgent,

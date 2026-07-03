@@ -16,22 +16,6 @@ configuración (modelo, plantilla y skills).
 > desplegarse en producción ni expuesta a internet: orquesta procesos de
 > `copilot` en tu máquina.
 
----
-
-## Tabla de contenidos
-
-- [Requisitos](#requisitos)
-- [Puesta en marcha](#puesta-en-marcha)
-- [Agentes y modelos soportados](#agentes-y-modelos-soportados)
-- [Cómo funciona](#cómo-funciona)
-- [Configuración de agentes](#configuración-de-agentes)
-- [Tarjetas de agente](#tarjetas-de-agente)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Scripts](#scripts)
-- [Solución de problemas](#solución-de-problemas)
-
----
-
 ## Requisitos
 
 | Requisito | Versión / nota |
@@ -67,88 +51,65 @@ make setup   # verifica requisitos + npm install
 make dev     # arranca la app
 ```
 
-## Agentes y modelos soportados
+## Agentes y modelos
 
-**Runner soportado:** [GitHub Copilot CLI](https://docs.github.com/copilot). Cada
-agente se ejecuta como un proceso independiente `copilot -p`, lo que permite
-mezclar modelos y personas en la misma ronda.
-
-**Modelos disponibles** (flag `--model` de Copilot CLI, definidos en
-[`server/models.ts`](server/models.ts)):
-
-| Familia | Modelos |
-|---------|---------|
-| Auto | `auto` (Copilot elige) |
-| Claude | `claude-sonnet-4.6`, `claude-haiku-4.5`, `claude-opus-4.8` |
-| GPT-5.x | `gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.4-mini` |
-| Gemini | `gemini-3.1-pro`, `gemini-3.5-flash` |
-
-> La lista refleja los modelos del selector de `copilot`. Si Copilot CLI añade o
-> retira modelos, actualiza `server/models.ts`.
+Cada agente se ejecuta como un proceso independiente con [GitHub Copilot
+CLI](https://docs.github.com/copilot). Los modelos se cargan **bajo demanda**
+desde el botón «Recargar modelos» en el formulario de agente; no hay lista por
+defecto.
 
 ## Cómo funciona
 
-Un **único proceso de Vite** sirve el frontend y, mediante un plugin
-([`server/vite-plugin.ts`](server/vite-plugin.ts)), expone la API y orquesta los
-agentes. No hay servidor backend separado.
+Un plugin de Vite ([`server/vite-plugin.ts`](server/vite-plugin.ts)) sirve el
+frontend y orquesta los agentes sin servidor backend separado. Al enviar una
+consulta, el navegador hace `POST /api/run` y recibe un stream NDJSON con los
+eventos en tiempo real. El servidor lanza un proceso `copilot -p` por agente y
+traduce sus respuestas a estados (`thinking → responding → finished`/`error`).
+Cancelar detiene los procesos automáticamente.
 
-```
-vite (un proceso)
- ├─ Frontend React + Tailwind (src/)
- └─ Plugin officeApiPlugin (server/)
-     ├─ /api/models | /api/skills | /api/templates  (catálogos)
-     ├─ /api/agents  (CRUD del equipo → office.config.json)
-     └─ /api/run     (POST con streaming NDJSON de una ronda)
-```
+### Flujo de ejecución
 
-Al preguntar, el navegador hace `POST /api/run` y lee un stream **NDJSON** (un
-evento por línea). El servidor lanza un proceso `copilot -p` por agente, traduce
-los eventos JSONL de Copilot a estados (`idle → starting → thinking →
-responding → finished`/`error`) y los reenvía en vivo. Cancelar = abortar la
-petición (`AbortController`); el servidor detecta el cierre y mata los procesos.
+```mermaid
+graph TD
+    A["👤 Usuario escribe consulta"] --> B["📤 POST /api/run + listaAgentes"]
+    B --> C["🔀 Backend recibe consulta"]
+    C --> D{"Para cada agente"}
+    D --> E["🚀 Lanza copilot -p"]
+    E --> F["💭 Copilot procesa\n+prompt del agente\n+skills"]
+    F --> G["📡 Streaming JSONL\ncopilot → servidor"]
+    G --> H["🔄 Servidor traduce eventos"]
+    H --> I["starting\nthinking\nresponding"]
+    I --> J["📊 Streaming NDJSON\nservidor → navegador"]
+    J --> K["🎨 Frontend actualiza\nUI en tiempo real"]
+    K --> L["✅ Agente termina"]
+    L --> M["📝 Respuesta final\nvisible al usuario"]
+    N["⏹️ Usuario cancela"] --> O["🛑 AbortController\nmata procesos"]
+    style A fill:#1e293b
+    style K fill:#3b82f6
+    style M fill:#10b981
+    style O fill:#ef4444
+```
 
 ## Configuración de agentes
 
-Desde la pantalla de Agentes se pueden crear, editar y eliminar especialistas
-(hasta 8). El formulario incluye un botón `↺` que asigna nombre e icono
-aleatorio al nuevo agente.
+Crea, edita y elimina especialistas desde la UI (hasta 8). Las plantillas de
+agente viven en **`.agents/*.md`** y los skills reutilizables en **`.skills/*.md`**
+(ambos trackeados en git). El equipo actual se guarda en **`.tmp/agent.config.json`**
+(no versionado). Detecta y carga `.md` automáticamente.
 
-- **`.agents/*.md`** — plantillas de agente (persona). Frontmatter `name` +
-  cuerpo markdown con las instrucciones.
-- **`.skills/*.md`** — skills reutilizables. Frontmatter `name` + cuerpo.
-- **`office.config.json`** — el equipo actual, gestionado por la UI.
+Las skills soportan un campo opcional **`applyTo`** en el frontmatter (mismo
+estándar que usa GitHub Copilot para instrucciones específicas de path):
+patrones glob separados por comas que indican a qué archivos aplica, p.ej.
+`applyTo: "**/*.java, **/pom.xml"`. Es metadata informativa — no filtra
+automáticamente, es una guía visible en la UI al armar el equipo.
 
-Las plantillas y skills se detectan automáticamente; la app no las modifica.
-Este repositorio incluye un conjunto **genérico** de ejemplo (`backend`,
-`frontend`, `qa`, `ux` y skills cortas) para que arranque con un equipo válido;
-añade los tuyos creando nuevos `.md`.
+## Estructura
 
-## Tarjetas de agente
-
-Cada agente se muestra en una tarjeta con:
-
-- **Estado en tiempo real** — badge (`idle`, `thinking`, `responding`, `finished`, `error`).
-- **Modelo y skills** — el modelo con su icono de acento; las skills colapsadas en un botón `N skills ▾`.
-- **Contador de duración** — arranca al empezar y se congela al terminar.
-- **Tokens** — total (in + out) con tooltip que desglosa ambos valores.
-- **Respuesta** — streaming en vivo con cursor animado; texto final al completar.
-
-## Estructura del proyecto
-
-```
-AgentColony/
-├─ .agents/            Plantillas de agente (persona) — *.md
-├─ .skills/            Skills reutilizables — *.md
-├─ server/             Plugin de Vite: API + orquestación de Copilot CLI
-│  ├─ vite-plugin.ts   Rutas /api/* y streaming NDJSON
-│  ├─ copilot-runner.ts  Lanza y traduce los procesos `copilot -p`
-│  ├─ models.ts        Catálogo de modelos
-│  └─ ...
-├─ src/                Frontend React + Tailwind
-├─ office.config.json  Equipo actual (gestionado por la UI)
-├─ vite.config.ts
-└─ Makefile            Atajos: setup, dev, build, lint, check
-```
+- **`.agents/`** — plantillas de agente (`.md`)
+- **`.skills/`** — skills reutilizables (`.md`)
+- **`.tmp/`** — estado local en runtime (no versionado)
+- **`server/`** — plugin Vite: API y orquestación de Copilot CLI
+- **`src/`** — frontend React + Tailwind
 
 ## Scripts
 

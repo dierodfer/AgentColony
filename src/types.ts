@@ -16,6 +16,8 @@ export interface ModelOption {
 export interface SkillInfo {
   id: string
   name: string
+  /** Patrones glob (separados por comas) a los que aplica, p.ej. "**\/*.java". */
+  applyTo?: string
 }
 
 export interface AgentTemplate {

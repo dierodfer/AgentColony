@@ -15,7 +15,7 @@ import {
   updateSkill,
   deleteSkill,
 } from './config-reader.ts'
-import { MODELS, isValidModel } from './models.ts'
+import { getModels, isValidModel, refreshModels } from './models.ts'
 import { OfficeRunner } from './copilot-runner.ts'
 import { generateAgentTemplate, generateSkill } from './template-generator.ts'
 import type { AgentConfig, ServerMessage } from './types.ts'
@@ -62,7 +62,12 @@ function validateAgent(body: unknown): { agent: Omit<AgentConfig, 'id'> } | { er
   }
 
   const model = typeof b?.model === 'string' ? b.model : ''
-  if (!isValidModel(model)) return { error: `El modelo "${model}" no es válido.` }
+  if (!model) return { error: 'El modelo es obligatorio.' }
+  // Solo validamos contra el catálogo si ya se han recargado modelos; si aún no
+  // (caché vacía), aceptamos cualquier id para no bloquear edición de agentes.
+  if (getModels().length > 0 && !isValidModel(model)) {
+    return { error: `El modelo "${model}" no es válido.` }
+  }
 
   const validSkills = new Set(getSkills().map((s) => s.id))
   const skills = Array.isArray(b?.skills)
@@ -89,8 +94,17 @@ export function officeApiPlugin(): Plugin {
 
         try {
           // ---- Catálogos ----
-          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, MODELS)
+          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, getModels())
           if (method === 'GET' && path === '/api/skills') return sendJson(res, 200, getSkills())
+
+          // ---- Recargar modelos desde Copilot (/model), bajo demanda ----
+          if (method === 'POST' && path === '/api/models/refresh') {
+            try {
+              return sendJson(res, 200, await refreshModels())
+            } catch (e) {
+              return sendJson(res, 502, { error: (e as Error).message })
+            }
+          }
           if (method === 'GET' && path === '/api/templates') return sendJson(res, 200, getAgentTemplates())
 
           // ---- Generar skill con IA ----
@@ -107,10 +121,10 @@ export function officeApiPlugin(): Plugin {
 
           // ---- Crear skill / plantilla (escriben en .skills/ y .agents/) ----
           if (method === 'POST' && path === '/api/skills') {
-            const b = (await readJson(req)) as { name?: string; body?: string }
+            const b = (await readJson(req)) as { name?: string; body?: string; applyTo?: string }
             if (!b.name?.trim()) return sendJson(res, 400, { error: 'El nombre es obligatorio.' })
             try {
-              return sendJson(res, 201, createSkill(b.name, b.body ?? ''))
+              return sendJson(res, 201, createSkill(b.name, b.body ?? '', b.applyTo))
             } catch (e) {
               return sendJson(res, 400, { error: (e as Error).message })
             }
@@ -168,10 +182,10 @@ export function officeApiPlugin(): Plugin {
             const id = decodeURIComponent(skillMatch[1])
             if (method === 'GET') return sendJson(res, 200, { body: getSkillBody(id) })
             if (method === 'PUT') {
-              const b = (await readJson(req)) as { name?: string; body?: string }
+              const b = (await readJson(req)) as { name?: string; body?: string; applyTo?: string }
               if (!b.name?.trim()) return sendJson(res, 400, { error: 'El nombre es obligatorio.' })
               try {
-                return sendJson(res, 200, updateSkill(id, b.name, b.body ?? ''))
+                return sendJson(res, 200, updateSkill(id, b.name, b.body ?? '', b.applyTo))
               } catch (e) {
                 return sendJson(res, 400, { error: (e as Error).message })
               }

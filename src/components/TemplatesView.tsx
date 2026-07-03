@@ -141,6 +141,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
   const [open, setOpen] = useState(false)
   const [body, setBody] = useState('')
   const [name, setName] = useState(skill.name)
+  const [applyTo, setApplyTo] = useState(skill.applyTo ?? '')
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -152,6 +153,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
         const res = await api.getSkillBody(skill.id)
         setBody(res.body)
         setName(skill.name)
+        setApplyTo(skill.applyTo ?? '')
         setError(null)
       } catch (e) {
         setError((e as Error).message)
@@ -167,7 +169,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
     setLoading(true)
     setError(null)
     try {
-      await api.updateSkill(skill.id, { name, body })
+      await api.updateSkill(skill.id, { name, body, applyTo })
       onReload()
       setOpen(false)
     } catch (e) {
@@ -197,6 +199,14 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
       >
         <span className={`text-white/40 transition-transform ${open ? 'rotate-90' : ''}`}>&#9654;</span>
         <span className="font-medium text-white/80">{skill.name}</span>
+        {skill.applyTo && (
+          <span
+            title={`Aplica a: ${skill.applyTo}`}
+            className="rounded-md border border-line bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-white/45"
+          >
+            {skill.applyTo}
+          </span>
+        )}
         <span className="ml-auto text-xs text-white/25">{skill.id}.md</span>
       </button>
 
@@ -217,6 +227,17 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
                 placeholder="Nombre"
                 className={fieldCls}
               />
+              <div>
+                <input
+                  value={applyTo}
+                  onChange={(e) => setApplyTo(e.target.value)}
+                  placeholder="Aplica a (glob, opcional): **/*.java, **/pom.xml"
+                  className={`font-mono ${fieldCls}`}
+                />
+                <p className="mt-1 text-[11px] text-white/30">
+                  Patrones separados por comas. Metadata informativa: indica en qué archivos es relevante esta skill.
+                </p>
+              </div>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -414,6 +435,7 @@ function GenerateSkillForm({ onDone }: { onDone: () => void }) {
 function CreateSkillForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const [body, setBody] = useState('')
+  const [applyTo, setApplyTo] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -421,7 +443,7 @@ function CreateSkillForm({ onDone }: { onDone: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await api.createSkill({ name, body })
+      await api.createSkill({ name, body, applyTo })
       onDone()
     } catch (e) {
       setError((e as Error).message)
@@ -440,6 +462,12 @@ function CreateSkillForm({ onDone }: { onDone: () => void }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         className={fieldCls}
+      />
+      <input
+        placeholder="Aplica a (glob, opcional): **/*.java, **/pom.xml"
+        value={applyTo}
+        onChange={(e) => setApplyTo(e.target.value)}
+        className={`font-mono ${fieldCls}`}
       />
       <textarea
         placeholder="Contenido de la skill (markdown)"

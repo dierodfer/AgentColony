@@ -23,6 +23,7 @@ async function sendJson<T>(url: string, method: string, body?: unknown): Promise
 
 export const api = {
   getModels: () => getJson<ModelOption[]>('/api/models'),
+  refreshModels: () => sendJson<ModelOption[]>('/api/models/refresh', 'POST'),
   getSkills: () => getJson<SkillInfo[]>('/api/skills'),
   getTemplates: () => getJson<AgentTemplate[]>('/api/templates'),
   getAgents: () => getJson<AgentConfig[]>('/api/agents'),
@@ -34,13 +35,13 @@ export const api = {
   deleteAgent: (id: string) =>
     sendJson<void>(`/api/agents/${encodeURIComponent(id)}`, 'DELETE'),
 
-  createSkill: (data: { name: string; body?: string }) =>
+  createSkill: (data: { name: string; body?: string; applyTo?: string }) =>
     sendJson<SkillInfo>('/api/skills', 'POST', data),
   generateSkill: (data: { prompt: string; model?: string }) =>
     sendJson<SkillInfo>('/api/skills/generate', 'POST', data),
   getSkillBody: (id: string) =>
     getJson<{ body: string }>(`/api/skills/${encodeURIComponent(id)}`),
-  updateSkill: (id: string, data: { name: string; body: string }) =>
+  updateSkill: (id: string, data: { name: string; body: string; applyTo?: string }) =>
     sendJson<SkillInfo>(`/api/skills/${encodeURIComponent(id)}`, 'PUT', data),
   deleteSkill: (id: string) =>
     sendJson<void>(`/api/skills/${encodeURIComponent(id)}`, 'DELETE'),

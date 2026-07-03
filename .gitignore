@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Estado local en runtime (equipo de agentes gestionado por la UI). No se
+# versiona: se regenera en la máquina de cada usuario.
+.tmp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -23,8 +27,3 @@ dist-ssr
 *.sln
 *.sw?
 
-# Plantillas/skills extensas y específicas (no se publican; locales del autor).
-# El repo solo incluye un conjunto genérico de ejemplo.
-.agents/software-architect-advisor.md
-.agents/java-clean-architecture-engineer.md
-.skills/spring-boot-java-backend-engineering.md

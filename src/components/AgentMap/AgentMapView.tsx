@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HeroPrompt } from '../HeroPrompt'
+import { UsageSummary } from '../UsageSummary'
 import { MapBackground } from './MapBackground'
 import { AgentNode } from './AgentNode'
 import { AgentBubble } from './AgentBubble'
+import { AgentInfoPanel } from './AgentInfoPanel'
 import { accentOf } from '../AgentIdentity'
 import { computeHomePositions, depthOf } from '../../lib/nodeLayout'
 import type { NodePos } from '../../lib/nodeLayout'
-import type { AgentConfig, AgentRuntime } from '../../types'
+import type { RunEntry } from '../../hooks/useOfficeRun'
+import type { AgentConfig, AgentRuntime, AgentTemplate, ModelOption } from '../../types'
 
 const EMPTY_RUNTIME: AgentRuntime = {
   status: 'idle',
@@ -27,24 +30,51 @@ const EMPTY_RUNTIME: AgentRuntime = {
 export function AgentMapView({
   agents,
   runtime,
+  templates,
+  models,
   onAsk,
   onCancel,
   isRunning,
   disabled,
   pendingPrompt,
+  totalAic,
+  completedCount,
+  totalAgents,
+  totalTokens,
+  avgElapsedMs,
+  requestCount,
+  runHistory,
+  history,
+  onSelectPrompt,
 }: {
   agents: AgentConfig[]
   runtime: Record<string, AgentRuntime>
+  templates: AgentTemplate[]
+  models: ModelOption[]
   onAsk: (prompt: string) => void
   onCancel: () => void
   isRunning: boolean
   disabled: boolean
   pendingPrompt: string
+  totalAic: number
+  completedCount: number
+  totalAgents: number
+  totalTokens: number
+  avgElapsedMs: number | null
+  requestCount: number
+  runHistory: RunEntry[]
+  history: string[]
+  onSelectPrompt: (p: string) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [overrides, setOverrides] = useState<Record<string, NodePos>>({})
+  const [openInfoId, setOpenInfoId] = useState<string | null>(null)
   const rafPending = useRef(false)
+
+  const templateNameOf = (file: string) =>
+    templates.find((t) => t.file === file)?.name ?? 'Especialista'
+  const modelLabelOf = (id: string) => models.find((m) => m.id === id)?.label ?? id
 
   useEffect(() => {
     const el = containerRef.current
@@ -81,7 +111,7 @@ export function AgentMapView({
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-5 z-40 flex justify-center px-4">
+      <div className="pointer-events-none absolute inset-x-0 top-5 z-40 flex flex-col items-center px-4">
         <div className="pointer-events-auto w-full max-w-2xl">
           <HeroPrompt
             onAsk={onAsk}
@@ -89,6 +119,19 @@ export function AgentMapView({
             isRunning={isRunning}
             disabled={disabled}
             externalValue={pendingPrompt}
+          />
+        </div>
+        <div className="pointer-events-auto w-full max-w-3xl">
+          <UsageSummary
+            totalAic={totalAic}
+            completedCount={completedCount}
+            totalAgents={totalAgents}
+            totalTokens={totalTokens}
+            avgElapsedMs={avgElapsedMs}
+            requestCount={requestCount}
+            runHistory={runHistory}
+            history={history}
+            onSelectPrompt={onSelectPrompt}
           />
         </div>
       </div>
@@ -125,6 +168,8 @@ export function AgentMapView({
                   depth={depth}
                   containerRef={containerRef}
                   onDragEnd={onNodeDragEnd}
+                  infoOpen={openInfoId === agent.id}
+                  onToggleInfo={() => setOpenInfoId((id) => (id === agent.id ? null : agent.id))}
                 />
                 <AgentBubble
                   accent={accent}
@@ -134,6 +179,20 @@ export function AgentMapView({
                   side={side}
                   bounds={size}
                 />
+                {openInfoId === agent.id && (
+                  <AgentInfoPanel
+                    accent={accent}
+                    name={agent.name}
+                    avatar={agent.avatar}
+                    templateName={templateNameOf(agent.agentFile)}
+                    model={modelLabelOf(agent.model)}
+                    skills={agent.skills}
+                    anchor={anchorPx}
+                    side={side === 'right' ? 'left' : 'right'}
+                    bounds={size}
+                    onClose={() => setOpenInfoId(null)}
+                  />
+                )}
               </div>
             )
           })}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useOfficeData } from './hooks/useOfficeData'
 import { useOfficeRun } from './hooks/useOfficeRun'
 import { useHistory } from './hooks/useHistory'
@@ -13,7 +13,6 @@ import { ACCENTS } from './components/AgentIdentity'
 import type { AgentConfig, AgentDraft, AgentStatus } from './types'
 
 const MAX_AGENTS = 8
-const DEFAULT_MODEL = 'gpt-5.4-mini'
 const AGENT_NAMES = [
   'Neon', 'Cipher', 'Vortex', 'Specter', 'Raven', 'Onyx', 'Nyx', 'Quasar',
   'Helix', 'Pulsar', 'Glitch', 'Cobalt', 'Aether', 'Zenith', 'Krypt', 'Vesper',
@@ -32,6 +31,14 @@ export default function App() {
   const [question, setQuestion] = useState('')
   const [view, setView] = useState<SectionId>('agentes')
   const [pendingPrompt, setPendingPrompt] = useState('')
+
+  // Modelo por defecto del formulario de creación: preferimos un "GPT mini" si
+  // Copilot lo ofrece; si no, el primero disponible. Se resuelve una vez
+  // consultados los modelos a Copilot y se guarda en esta variable de la vista.
+  const defaultModel = useMemo(() => {
+    const gptMini = data.models.find((m) => /gpt.*mini/i.test(m.id))
+    return gptMini?.id ?? data.models[0]?.id ?? 'auto'
+  }, [data.models])
 
   const handleAsk = (prompt: string) => {
     setQuestion(prompt)
@@ -60,7 +67,7 @@ export default function App() {
       name: freeName,
       avatar: freeAvatar,
       agentFile: data.templates[0]?.file ?? '',
-      model: data.models.some((m) => m.id === DEFAULT_MODEL) ? DEFAULT_MODEL : (data.models[0]?.id ?? 'auto'),
+      model: defaultModel,
       skills: [],
     }
   }
@@ -164,11 +171,22 @@ export default function App() {
           <AgentMapView
             agents={data.agents}
             runtime={runtime}
+            templates={data.templates}
+            models={data.models}
             onAsk={handleAsk}
             onCancel={cancel}
             isRunning={isRunning}
             disabled={data.agents.length === 0}
             pendingPrompt={pendingPrompt}
+            totalAic={totalAic}
+            completedCount={doneCount}
+            totalAgents={total}
+            totalTokens={totalTokens}
+            avgElapsedMs={avgElapsedMs}
+            requestCount={requestCount}
+            runHistory={runHistory}
+            history={history.items}
+            onSelectPrompt={setPendingPrompt}
           />
         </main>
       )}
@@ -190,6 +208,7 @@ export default function App() {
             : newDraft()}
           isNew={editing.mode === 'new'}
           models={data.models}
+          onReloadModels={data.refreshModels}
           skills={data.skills}
           templates={data.templates}
           takenNames={data.agents

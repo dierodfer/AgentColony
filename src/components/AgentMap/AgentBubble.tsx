@@ -19,10 +19,10 @@ const NODE_GAP = 46
 
 /**
  * Bocadillo de diálogo anclado a un nodo. Se muestra mientras el agente
- * trabaja o tiene respuesta; a los 10s de terminar se colapsa a un icono
- * (mismo patrón `minimalBadge` que ya usa `AgentCard`), reexpandible al
- * click. El lado (`left`/`right`) y el clamping contra el contenedor los
- * decide `AgentMapView` por cuadrante del nodo.
+ * trabaja o tiene respuesta, y permanece estático (no se auto-colapsa):
+ * solo se minimiza a un icono si el usuario pulsa ✕, reexpandible al click.
+ * El lado (`left`/`right`) y el clamping contra el contenedor los decide
+ * `AgentMapView` por cuadrante del nodo.
  */
 export function AgentBubble({
   accent,
@@ -48,12 +48,7 @@ export function AgentBubble({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (status !== 'finished' && status !== 'error') {
-      setCollapsed(false)
-      return
-    }
-    const id = setTimeout(() => setCollapsed(true), 10000)
-    return () => clearTimeout(id)
+    if (status !== 'finished' && status !== 'error') setCollapsed(false)
   }, [status])
 
   useEffect(() => {

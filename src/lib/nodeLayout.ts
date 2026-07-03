@@ -10,12 +10,14 @@ export interface NodePos {
  * jitter por agente usa la misma técnica de seed que `AgentRobot`
  * (suma de charCodes del id) para que la disposición sea siempre la misma
  * mientras no cambie la lista de agentes, sin depender de estado externo.
+ * El centro se desplaza hacia abajo (cy > 0.5) para dejar hueco arriba al
+ * toolbox flotante (prompt + estadísticas).
  */
 export function computeHomePositions(agentIds: string[], jitterRadius = 0.06): Record<string, NodePos> {
   const n = agentIds.length
   const positions: Record<string, NodePos> = {}
   const cx = 0.5
-  const cy = 0.5
+  const cy = 0.66
   const outerCount = n <= 6 ? n : Math.ceil(n / 2)
   const innerCount = n <= 6 ? 0 : Math.floor(n / 2)
 

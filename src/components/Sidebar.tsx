@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { Bot } from 'lucide-react'
 
 export type SectionId = 'agentes' | 'templates' | 'mapa'
 
@@ -14,7 +15,7 @@ function BrandMark() {
   )
 }
 
-function AgentsIcon() {
+function PanelIcon() {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden>
       <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
@@ -101,6 +102,60 @@ function NavItem({
   )
 }
 
+function NavGroup({
+  label,
+  count,
+  icon,
+  active,
+  collapsed,
+  expanded,
+  onToggle,
+  children,
+}: {
+  label: string
+  count?: number
+  icon: ReactNode
+  active: boolean
+  collapsed: boolean
+  expanded: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        title={collapsed ? label : undefined}
+        className={`flex w-full items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors duration-150 ${
+          collapsed ? 'justify-center' : 'gap-2.5'
+        } ${
+          active
+            ? 'bg-white/[0.06] text-white/90'
+            : 'text-white/55 hover:bg-white/[0.04] hover:text-white/80'
+        }`}
+      >
+        <span className={active ? 'text-accent' : 'text-white/40'}>{icon}</span>
+        {!collapsed && (
+          <>
+            <span className="flex-1 text-left">{label}</span>
+            {count !== undefined && (
+              <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-medium text-white/45">
+                {count}
+              </span>
+            )}
+            <span className={`text-white/30 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}>
+              <ChevronIcon right />
+            </span>
+          </>
+        )}
+      </button>
+      {!collapsed && expanded && (
+        <div className="ml-3 mt-0.5 flex flex-col gap-0.5 border-l border-line pl-2.5">{children}</div>
+      )}
+    </div>
+  )
+}
+
 export function Sidebar({
   active,
   agentCount,
@@ -111,6 +166,8 @@ export function Sidebar({
   onNavigate: (id: SectionId) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
+  const [agentsExpanded, setAgentsExpanded] = useState(true)
+  const agentsActive = active === 'agentes' || active === 'mapa'
 
   return (
     <aside
@@ -140,21 +197,30 @@ export function Sidebar({
       </div>
 
       <nav className="mt-7 flex flex-col gap-0.5">
-        <NavItem
+        <NavGroup
           label="Agentes"
-          icon={<AgentsIcon />}
+          icon={<Bot size={16} strokeWidth={1.8} />}
           count={agentCount}
-          active={active === 'agentes'}
+          active={agentsActive}
           collapsed={collapsed}
-          onClick={() => onNavigate('agentes')}
-        />
-        <NavItem
-          label="Mapa"
-          icon={<MapIcon />}
-          active={active === 'mapa'}
-          collapsed={collapsed}
-          onClick={() => onNavigate('mapa')}
-        />
+          expanded={agentsExpanded}
+          onToggle={() => (collapsed ? onNavigate('agentes') : setAgentsExpanded((v) => !v))}
+        >
+          <NavItem
+            label="Panel"
+            icon={<PanelIcon />}
+            active={active === 'agentes'}
+            collapsed={false}
+            onClick={() => onNavigate('agentes')}
+          />
+          <NavItem
+            label="Mapa"
+            icon={<MapIcon />}
+            active={active === 'mapa'}
+            collapsed={false}
+            onClick={() => onNavigate('mapa')}
+          />
+        </NavGroup>
         <NavItem
           label="Templates & Skills"
           icon={<TemplatesIcon />}

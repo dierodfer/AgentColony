@@ -30,6 +30,8 @@ export function AgentNode({
   depth,
   containerRef,
   onDragEnd,
+  infoOpen,
+  onToggleInfo,
 }: {
   agent: AgentConfig
   status: AgentStatus
@@ -38,6 +40,8 @@ export function AgentNode({
   depth: number
   containerRef: RefObject<HTMLDivElement | null>
   onDragEnd: (agentId: string, next: NodePos) => void
+  infoOpen: boolean
+  onToggleInfo: () => void
 }) {
   const seed = useMemo(() => [...agent.id].reduce((a, c) => a + c.charCodeAt(0), 0), [agent.id])
   const bobAmplitude = 6 + (seed % 5)
@@ -83,15 +87,23 @@ export function AgentNode({
           />
           <AgentRobot id={agent.avatar} status={status} size={size} />
         </div>
-        <span
-          className="whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium text-white/85"
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleInfo()
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title={`Ver ficha de ${agent.name}`}
+          className="whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium text-white/85 transition-transform hover:scale-105"
           style={{
-            borderColor: `color-mix(in srgb, ${accent} 35%, transparent)`,
+            borderColor: infoOpen
+              ? accent
+              : `color-mix(in srgb, ${accent} 35%, transparent)`,
             backgroundColor: `color-mix(in srgb, ${accent} 14%, rgba(11,15,23,0.72))`,
           }}
         >
           {agent.name}
-        </span>
+        </button>
       </motion.div>
     </motion.div>
   )

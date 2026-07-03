@@ -171,11 +171,22 @@ export default function App() {
           <AgentMapView
             agents={data.agents}
             runtime={runtime}
+            templates={data.templates}
+            models={data.models}
             onAsk={handleAsk}
             onCancel={cancel}
             isRunning={isRunning}
             disabled={data.agents.length === 0}
             pendingPrompt={pendingPrompt}
+            totalAic={totalAic}
+            completedCount={doneCount}
+            totalAgents={total}
+            totalTokens={totalTokens}
+            avgElapsedMs={avgElapsedMs}
+            requestCount={requestCount}
+            runHistory={runHistory}
+            history={history.items}
+            onSelectPrompt={setPendingPrompt}
           />
         </main>
       )}

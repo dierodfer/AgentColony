@@ -8,9 +8,9 @@
 ![GitHub Copilot CLI](https://img.shields.io/badge/GitHub%20Copilot-CLI-000000?logo=githubcopilot&logoColor=white)
 
 **Local** web app that runs up to **8 GitHub Copilot CLI agents in
-parallel** and shows **all** of their responses at once, in a dark,
-minimalist grid. You type a question and watch each agent answer according
-to its own configuration (model, template and skills).
+parallel**. It shows **all** of their responses at once, in a dark,
+minimalist grid. Type a question and watch each agent answer in its own
+way, based on its model, template and skills.
 
 > ⚠️ Built for **local execution** with `npm run dev`. Not meant to be
 > deployed to production or exposed to the internet: it orchestrates
@@ -63,12 +63,11 @@ the "Reload models" button in the agent form; there's no default list.
 ## How it works
 
 A Vite plugin ([`server/vite-plugin.ts`](server/vite-plugin.ts)) serves the
-frontend and orchestrates the agents without a separate backend server. When
-you submit a question, the browser does a `POST /api/run` and receives an
-NDJSON stream with real-time events. The server spawns one `copilot -p`
-process per agent and translates its responses into states (`thinking →
-responding → finished`/`error`). Cancelling stops the processes
-automatically.
+frontend and orchestrates the agents — no separate backend server needed.
+Submitting a question calls `POST /api/run`, which streams back real-time
+updates. The server spawns one `copilot -p` process per agent and tracks its
+progress (`thinking → responding → finished`/`error`). Cancelling stops
+every process right away.
 
 ### Architecture
 
@@ -91,11 +90,10 @@ live in **`.agents/*.md`** and reusable skills in **`.skills/*.md`** (both
 tracked in git). The current team is saved to **`.tmp/agent.config.json`**
 (not versioned). `.md` files are detected and loaded automatically.
 
-Skills support an optional **`applyTo`** frontmatter field (the same
-standard GitHub Copilot uses for path-specific instructions): comma-separated
-glob patterns indicating which files it applies to, e.g.
-`applyTo: "**/*.java, **/pom.xml"`. It's informational metadata — it doesn't
-filter automatically, it's a visible hint in the UI when building your team.
+Skills support an optional **`applyTo`** frontmatter field, using the same
+format GitHub Copilot uses for path-specific instructions: a comma-separated
+list of glob patterns, e.g. `applyTo: "**/*.java, **/pom.xml"`. It's just a
+hint shown in the UI — nothing gets filtered automatically.
 
 ## Structure
 

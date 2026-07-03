@@ -16,6 +16,8 @@ configuración (modelo, plantilla y skills).
 > desplegarse en producción ni expuesta a internet: orquesta procesos de
 > `copilot` en tu máquina.
 
+![Vista de mapa de agentes](docs/mapa.png)
+
 ## Requisitos
 
 | Requisito | Versión / nota |
@@ -67,27 +69,18 @@ eventos en tiempo real. El servidor lanza un proceso `copilot -p` por agente y
 traduce sus respuestas a estados (`thinking → responding → finished`/`error`).
 Cancelar detiene los procesos automáticamente.
 
-### Flujo de ejecución
+### Arquitectura
 
 ```mermaid
 graph TD
-    A["👤 Usuario escribe consulta"] --> B["📤 POST /api/run + listaAgentes"]
-    B --> C["🔀 Backend recibe consulta"]
-    C --> D{"Para cada agente"}
-    D --> E["🚀 Lanza copilot -p"]
-    E --> F["💭 Copilot procesa\n+prompt del agente\n+skills"]
-    F --> G["📡 Streaming JSONL\ncopilot → servidor"]
-    G --> H["🔄 Servidor traduce eventos"]
-    H --> I["starting\nthinking\nresponding"]
-    I --> J["📊 Streaming NDJSON\nservidor → navegador"]
-    J --> K["🎨 Frontend actualiza\nUI en tiempo real"]
-    K --> L["✅ Agente termina"]
-    L --> M["📝 Respuesta final\nvisible al usuario"]
-    N["⏹️ Usuario cancela"] --> O["🛑 AbortController\nmata procesos"]
-    style A fill:#1e293b
-    style K fill:#3b82f6
-    style M fill:#10b981
-    style O fill:#ef4444
+    UI["Interfaz React<br/>(grid / mapa de agentes)"]
+    Server["Servidor Vite<br/>(API + orquestador)"]
+    Copilot["Procesos Copilot CLI<br/>uno por agente, en paralelo"]
+    Config["Plantillas y skills<br/>.agents/ · .skills/"]
+
+    UI <--> Server
+    Server --> Copilot
+    Config --> Server
 ```
 
 ## Configuración de agentes

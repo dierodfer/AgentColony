@@ -7,115 +7,116 @@
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![GitHub Copilot CLI](https://img.shields.io/badge/GitHub%20Copilot-CLI-000000?logo=githubcopilot&logoColor=white)
 
-Aplicación web **local** que ejecuta hasta **8 agentes de GitHub Copilot CLI en
-paralelo** y muestra **todas** sus respuestas a la vez, en una cuadrícula dark y
-minimalista. Escribes una consulta y ves cómo responde cada agente según su
-configuración (modelo, plantilla y skills).
+**Local** web app that runs up to **8 GitHub Copilot CLI agents in
+parallel** and shows **all** of their responses at once, in a dark,
+minimalist grid. You type a question and watch each agent answer according
+to its own configuration (model, template and skills).
 
-> ⚠️ Pensada para **ejecución local** con `npm run dev`. No está diseñada para
-> desplegarse en producción ni expuesta a internet: orquesta procesos de
-> `copilot` en tu máquina.
+> ⚠️ Built for **local execution** with `npm run dev`. Not meant to be
+> deployed to production or exposed to the internet: it orchestrates
+> `copilot` processes on your machine.
 
-![Vista de mapa de agentes](docs/mapa.png)
+![Agent map view](docs/mapa.png)
 
-## Requisitos
+## Requirements
 
-| Requisito | Versión / nota |
+| Requirement | Version / note |
 |-----------|----------------|
 | **Node.js** | `20+` |
-| **npm** | incluido con Node |
-| **[GitHub Copilot CLI](https://docs.github.com/copilot)** (`copilot`) | instalado, en el `PATH` y **autenticado**. Requiere una suscripción activa de GitHub Copilot. |
+| **npm** | bundled with Node |
+| **[GitHub Copilot CLI](https://docs.github.com/copilot)** (`copilot`) | installed, on your `PATH` and **authenticated**. Requires an active GitHub Copilot subscription. |
 
-Comprueba que tienes todo con:
+Check you have everything with:
 
 ```bash
 node --version      # >= 20
-copilot --version   # debe responder
-make check          # verifica Node + Copilot CLI de una vez
+copilot --version   # should respond
+make check          # checks Node + Copilot CLI in one go
 ```
 
-La app **no gestiona credenciales**: usa la sesión ya autenticada de tu
-`copilot` local. No hay tokens ni claves en este repositorio.
+The app **doesn't manage credentials**: it uses your local `copilot`
+session, already authenticated. There are no tokens or keys in this
+repository.
 
-## Puesta en marcha
+## Getting started
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abre <http://localhost:5173>.
+Open <http://localhost:5173>.
 
-Con `make`:
+With `make`:
 
 ```bash
-make setup   # verifica requisitos + npm install
-make dev     # arranca la app
+make setup   # checks requirements + npm install
+make dev     # starts the app
 ```
 
-## Agentes y modelos
+## Agents and models
 
-Cada agente se ejecuta como un proceso independiente con [GitHub Copilot
-CLI](https://docs.github.com/copilot). Los modelos se cargan **bajo demanda**
-desde el botón «Recargar modelos» en el formulario de agente; no hay lista por
-defecto.
+Each agent runs as an independent process via [GitHub Copilot
+CLI](https://docs.github.com/copilot). Models are loaded **on demand** from
+the "Reload models" button in the agent form; there's no default list.
 
-## Cómo funciona
+## How it works
 
-Un plugin de Vite ([`server/vite-plugin.ts`](server/vite-plugin.ts)) sirve el
-frontend y orquesta los agentes sin servidor backend separado. Al enviar una
-consulta, el navegador hace `POST /api/run` y recibe un stream NDJSON con los
-eventos en tiempo real. El servidor lanza un proceso `copilot -p` por agente y
-traduce sus respuestas a estados (`thinking → responding → finished`/`error`).
-Cancelar detiene los procesos automáticamente.
+A Vite plugin ([`server/vite-plugin.ts`](server/vite-plugin.ts)) serves the
+frontend and orchestrates the agents without a separate backend server. When
+you submit a question, the browser does a `POST /api/run` and receives an
+NDJSON stream with real-time events. The server spawns one `copilot -p`
+process per agent and translates its responses into states (`thinking →
+responding → finished`/`error`). Cancelling stops the processes
+automatically.
 
-### Arquitectura
+### Architecture
 
 ```mermaid
 graph TD
-    UI["Interfaz React<br/>(grid / mapa de agentes)"]
-    Server["Servidor Vite<br/>(API + orquestador)"]
-    Copilot["Procesos Copilot CLI<br/>uno por agente, en paralelo"]
-    Config["Plantillas y skills<br/>.agents/ · .skills/"]
+    UI["React UI<br/>(grid / agent map)"]
+    Server["Vite server<br/>(API + orchestrator)"]
+    Copilot["Copilot CLI processes<br/>one per agent, in parallel"]
+    Config["Templates and skills<br/>.agents/ · .skills/"]
 
     UI <--> Server
     Server --> Copilot
     Config --> Server
 ```
 
-## Configuración de agentes
+## Agent configuration
 
-Crea, edita y elimina especialistas desde la UI (hasta 8). Las plantillas de
-agente viven en **`.agents/*.md`** y los skills reutilizables en **`.skills/*.md`**
-(ambos trackeados en git). El equipo actual se guarda en **`.tmp/agent.config.json`**
-(no versionado). Detecta y carga `.md` automáticamente.
+Create, edit and delete specialists from the UI (up to 8). Agent templates
+live in **`.agents/*.md`** and reusable skills in **`.skills/*.md`** (both
+tracked in git). The current team is saved to **`.tmp/agent.config.json`**
+(not versioned). `.md` files are detected and loaded automatically.
 
-Las skills soportan un campo opcional **`applyTo`** en el frontmatter (mismo
-estándar que usa GitHub Copilot para instrucciones específicas de path):
-patrones glob separados por comas que indican a qué archivos aplica, p.ej.
-`applyTo: "**/*.java, **/pom.xml"`. Es metadata informativa — no filtra
-automáticamente, es una guía visible en la UI al armar el equipo.
+Skills support an optional **`applyTo`** frontmatter field (the same
+standard GitHub Copilot uses for path-specific instructions): comma-separated
+glob patterns indicating which files it applies to, e.g.
+`applyTo: "**/*.java, **/pom.xml"`. It's informational metadata — it doesn't
+filter automatically, it's a visible hint in the UI when building your team.
 
-## Estructura
+## Structure
 
-- **`.agents/`** — plantillas de agente (`.md`)
-- **`.skills/`** — skills reutilizables (`.md`)
-- **`.tmp/`** — estado local en runtime (no versionado)
-- **`server/`** — plugin Vite: API y orquestación de Copilot CLI
-- **`src/`** — frontend React + Tailwind
+- **`.agents/`** — agent templates (`.md`)
+- **`.skills/`** — reusable skills (`.md`)
+- **`.tmp/`** — local runtime state (not versioned)
+- **`server/`** — Vite plugin: API and Copilot CLI orchestration
+- **`src/`** — React + Tailwind frontend
 
 ## Scripts
 
-| Script | Acción |
+| Script | Action |
 |--------|--------|
-| `npm run dev` | Arranca Vite (frontend + API) |
-| `npm run build` | Type-check (`tsc -b`) + build de producción del frontend |
+| `npm run dev` | Starts Vite (frontend + API) |
+| `npm run build` | Type-check (`tsc -b`) + production frontend build |
 | `npm run lint` | Oxlint |
-| `npm run preview` | Sirve el build de producción |
+| `npm run preview` | Serves the production build |
 
-## Solución de problemas
+## Troubleshooting
 
-- **`copilot: command not found`** → instala [GitHub Copilot CLI](https://docs.github.com/copilot) y asegúrate de que está en el `PATH`.
-- **Los agentes fallan al instante (`error`)** → tu sesión de Copilot no está autenticada o no tienes suscripción activa. Verifica con `copilot --version` y vuelve a iniciar sesión.
-- **Un modelo no responde** → puede no estar disponible en tu cuenta; prueba con `auto` o revisa `server/models.ts`.
-- **El puerto 5173 está ocupado** → Vite elegirá otro puerto; mira la URL que imprime al arrancar.
+- **`copilot: command not found`** → install [GitHub Copilot CLI](https://docs.github.com/copilot) and make sure it's on your `PATH`.
+- **Agents fail instantly (`error`)** → your Copilot session isn't authenticated or you don't have an active subscription. Check with `copilot --version` and log in again.
+- **A model doesn't respond** → it may not be available on your account; try `auto` or check `server/models.ts`.
+- **Port 5173 is busy** → Vite will pick another port; check the URL it prints on startup.

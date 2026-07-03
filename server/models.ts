@@ -1,22 +1,19 @@
 import { spawn } from 'node:child_process'
 import type { ModelOption } from './types.ts'
 
-// Los modelos se obtienen ejecutando el slash-command `/model` dentro de
-// Copilot CLI (así es como el CLI los lista). NO se consulta automáticamente:
+// Los modelos se obtienen preguntándole a Copilot CLI en modo no interactivo
+// (`copilot -p`, igual que copilot-runner.ts) por los ids que acepta su propio
+// flag --model, forzando salida JSON pura. NO se consulta automáticamente:
 // solo bajo demanda desde el botón "Recargar modelos" del formulario de agente
 // (endpoint POST /api/models/refresh). La lista resuelta se cachea en memoria
 // durante la sesión del servidor.
 
-const REFRESH_TIMEOUT_MS = 12_000
+const REFRESH_TIMEOUT_MS = 30_000
 
-// Familias de modelos conocidas de Copilot CLI. El grupo captura el id completo
-// (familia + versión + sufijo), permitiendo puntos y guiones internos.
-const MODEL_ID_RE = /\b((?:claude|gpt|gemini|grok)-[a-z0-9][a-z0-9.-]*|o[0-9][a-z0-9.-]*|auto)\b/gi
-
-// Secuencias ANSI (colores, movimientos de cursor) que emite la TUI de Copilot.
-// Se construye sin carácter de control literal para no disparar no-control-regex.
-const ANSI_RE = new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[ -/]*[@-~]', 'g')
-const ESC = String.fromCharCode(27)
+const LIST_MODELS_PROMPT =
+  'List every AI model id you can be configured to use (the exact ids accepted ' +
+  'by the --model flag). Respond with ONLY a JSON array of strings, no prose, ' +
+  'no markdown fences.'
 
 /** Genera una etiqueta legible a partir de un id de modelo. */
 function labelFor(id: string): string {
@@ -32,22 +29,23 @@ function labelFor(id: string): string {
 }
 
 /**
- * Extrae los ids de modelo de la salida del comando `/model` de Copilot,
- * limpiando primero los códigos ANSI de la TUI. Exportada para testear el
- * parseo sin ejecutar el CLI.
+ * Extrae el array de ids de modelo de la respuesta del agente (un bloque JSON,
+ * posiblemente con texto alrededor pese a la instrucción). Exportada para
+ * testear el parseo sin ejecutar el CLI.
  */
 export function parseModelsFromOutput(raw: string): ModelOption[] {
-  const text = raw.replace(ANSI_RE, '')
-  const ids: string[] = []
-  const seen = new Set<string>()
-  for (const m of text.matchAll(MODEL_ID_RE)) {
-    const id = m[1].toLowerCase().replace(/[.,;]+$/, '')
-    if (!seen.has(id)) {
-      seen.add(id)
-      ids.push(id)
-    }
+  const match = raw.match(/\[[\s\S]*\]/)
+  if (!match) return []
+  let ids: unknown
+  try {
+    ids = JSON.parse(match[0])
+  } catch {
+    return []
   }
-  const models = ids.map((id) => ({ id, label: labelFor(id) }))
+  if (!Array.isArray(ids)) return []
+  const models = ids
+    .filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+    .map((id) => ({ id, label: labelFor(id) }))
   // Si Copilot ofrece "auto", lo mostramos primero (opción recomendada).
   models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
   return models
@@ -68,55 +66,74 @@ export function isValidModel(id: string): boolean {
 }
 
 /**
- * Lanza `copilot`, ejecuta el slash-command `/model` para que liste los modelos
- * disponibles, y devuelve la salida cruda (con ANSI). Resuelve con lo capturado
- * al cerrar el proceso o al agotar el timeout; rechaza si `copilot` no se pudo
- * ejecutar y no produjo salida alguna.
+ * Lanza `copilot -p` en modo no interactivo (mismo patrón que copilot-runner.ts)
+ * pidiendo el listado de ids de modelo con salida JSON forzada, y devuelve el
+ * texto final del asistente. Rechaza si el proceso no se pudo ejecutar o si
+ * agota el timeout sin cerrar.
  */
 function runModelCommand(): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('copilot', [], { stdio: ['pipe', 'pipe', 'pipe'] })
+    const args = [
+      '-p', LIST_MODELS_PROMPT,
+      '--output-format', 'json',
+      '--allow-all-tools',
+      '--no-custom-instructions',
+      '--no-color',
+      '--deny-tool', 'write',
+      '--deny-tool', 'shell',
+    ]
+    const child = spawn('copilot', args, { stdio: ['ignore', 'pipe', 'pipe'] })
 
     let out = ''
+    let finalText = ''
     let settled = false
     const finish = (err?: Error) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       if (!child.killed) child.kill('SIGTERM')
-      if (err && !out) reject(err)
-      else resolve(out)
+      if (err) reject(err)
+      else resolve(finalText)
     }
 
     child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (c: string) => (out += c))
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (c: string) => (out += c))
-    child.on('error', (err) => finish(new Error(`No se pudo ejecutar copilot: ${err.message}`)))
-    child.on('close', () => finish())
-
-    const timer = setTimeout(() => finish(), REFRESH_TIMEOUT_MS)
-
-    // Abre el selector de modelos y, tras dar tiempo a que lo pinte, cierra el
-    // selector (ESC) y sale del REPL para que el proceso termine y volquemos out.
-    const write = (s: string) => {
-      try {
-        child.stdin.write(s)
-      } catch {
-        /* stdin pudo cerrarse si copilot no arrancó; el handler 'error' lo cubre */
+    child.stdout.on('data', (chunk: string) => {
+      out += chunk
+      let nl: number
+      while ((nl = out.indexOf('\n')) !== -1) {
+        const line = out.slice(0, nl).trim()
+        out = out.slice(nl + 1)
+        if (!line.startsWith('{')) continue
+        try {
+          const evt = JSON.parse(line)
+          if (evt.type === 'assistant.message' && typeof evt.data?.content === 'string') {
+            finalText = evt.data.content
+          }
+        } catch {
+          /* línea no-JSON o parcial, se ignora */
+        }
       }
-    }
-    write('/model\n')
-    setTimeout(() => {
-      write(ESC)
-      write('/exit\n')
-    }, 1800)
+    })
+    child.stderr.setEncoding('utf8')
+    let stderrOut = ''
+    child.stderr.on('data', (c: string) => (stderrOut += c))
+
+    child.on('error', (err) => finish(new Error(`No se pudo ejecutar copilot: ${err.message}`)))
+    child.on('close', (code) => {
+      if (code !== 0 && !finalText) {
+        finish(new Error(stderrOut.trim() || `copilot salió con código ${code}`))
+      } else {
+        finish()
+      }
+    })
+
+    const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), REFRESH_TIMEOUT_MS)
   })
 }
 
 /**
- * Recarga los modelos desde Copilot (`/model`), actualiza la caché y devuelve
- * la lista. Puede devolver [] si no se pudo parsear ningún modelo.
+ * Recarga los modelos desde Copilot (vía prompt no interactivo), actualiza la
+ * caché y devuelve la lista. Puede devolver [] si la respuesta no se pudo parsear.
  */
 export async function refreshModels(): Promise<ModelOption[]> {
   const output = await runModelCommand()

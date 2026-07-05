@@ -1,4 +1,6 @@
+import type { CSSProperties } from 'react'
 import type { AgentCli } from '../types'
+import { cliInfo } from '../lib/clis'
 
 /**
  * Insignia pequeña con la marca del CLI que ejecuta al agente, para superponer
@@ -6,12 +8,6 @@ import type { AgentCli } from '../types'
  * copilot = anillo/gafas, claude = destello, opencode = corchetes </>.
  * Opcionalmente muestra un punto de disponibilidad (verde/rojo).
  */
-
-const CLI_META: Record<AgentCli, { label: string; color: string }> = {
-  copilot: { label: 'GitHub Copilot CLI', color: '#7C93FF' },
-  claude: { label: 'Claude Code', color: '#D97757' },
-  opencode: { label: 'opencode', color: '#57C7B8' },
-}
 
 function CliMark({ cli }: { cli: AgentCli }) {
   if (cli === 'claude') {
@@ -53,7 +49,7 @@ export function CliBadge({
   /** true=verde, false=rojo, undefined=sin indicador. */
   available?: boolean
 }) {
-  const meta = CLI_META[cli] ?? CLI_META.copilot
+  const meta = cliInfo(cli)
   const dot = available === undefined ? null : available ? 'var(--color-st-finished)' : 'var(--color-st-error)'
   const title = available === undefined
     ? meta.label
@@ -80,9 +76,8 @@ export function CliBadge({
             width: size * 0.34,
             height: size * 0.34,
             backgroundColor: dot,
-            // @ts-expect-error CSS var para el color del ring
             '--tw-ring-color': 'rgba(11,15,23,0.92)',
-          }}
+          } as CSSProperties}
         />
       )}
     </span>

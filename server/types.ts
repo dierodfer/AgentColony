@@ -76,6 +76,6 @@ export type MemoryLink = [string, string]
 /** Eventos que el servidor emite por línea durante una ronda. */
 export type ServerMessage =
   | { type: 'agent-update'; agentId: string; status: AgentStatus; text?: string; error?: string }
-  | { type: 'agent-usage'; agentId: string; aic: number; outputTokens: number; inputTokens: number }
+  | { type: 'agent-usage'; agentId: string; aic: number; inputTokens: number; outputTokens: number }
   | { type: 'run-started'; agentIds: string[] }
   | { type: 'run-finished' }

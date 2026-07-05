@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
 import { CliBadge } from './CliBadge'
+import { CLIS } from '../lib/clis'
 import { api, type CliAvailability } from '../api'
 import type {
   AgentCli,
@@ -11,12 +12,6 @@ import type {
   ModelOption,
   SkillInfo,
 } from '../types'
-
-const CLI_OPTIONS: { id: AgentCli; label: string }[] = [
-  { id: 'copilot', label: 'GitHub Copilot CLI' },
-  { id: 'claude', label: 'Claude Code' },
-  { id: 'opencode', label: 'opencode' },
-]
 
 interface Props {
   initial: AgentDraft
@@ -299,7 +294,7 @@ export function AgentEditor({
             }}
             className={fieldCls}
           >
-            {CLI_OPTIONS.map((c) => (
+            {CLIS.map((c) => (
               <option key={c.id} value={c.id} className="bg-elevated">
                 {c.label}
               </option>

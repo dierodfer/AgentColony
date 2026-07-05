@@ -1,12 +1,12 @@
-import { spawn } from 'node:child_process'
+import { runOnce } from './cli-adapters.ts'
 import type { ModelOption } from './types.ts'
 
 // Los modelos se obtienen preguntándole a Copilot CLI en modo no interactivo
-// (`copilot -p`, igual que copilot-runner.ts) por los ids que acepta su propio
-// flag --model, forzando salida JSON pura. NO se consulta automáticamente:
-// solo bajo demanda desde el botón "Recargar modelos" del formulario de agente
-// (endpoint POST /api/models/refresh). La lista resuelta se cachea en memoria
-// durante la sesión del servidor.
+// (vía runOnce, misma capa de adaptadores que el runner) por los ids que acepta
+// su propio flag --model, forzando salida JSON pura. NO se consulta
+// automáticamente: solo bajo demanda desde el botón "Recargar modelos" del
+// formulario de agente (endpoint POST /api/models/refresh). La lista resuelta se
+// cachea en memoria durante la sesión del servidor. Es específico de copilot.
 
 const REFRESH_TIMEOUT_MS = 30_000
 
@@ -66,77 +66,12 @@ export function isValidModel(id: string): boolean {
 }
 
 /**
- * Lanza `copilot -p` en modo no interactivo (mismo patrón que copilot-runner.ts)
- * pidiendo el listado de ids de modelo con salida JSON forzada, y devuelve el
- * texto final del asistente. Rechaza si el proceso no se pudo ejecutar o si
- * agota el timeout sin cerrar.
- */
-function runModelCommand(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const args = [
-      '-p', LIST_MODELS_PROMPT,
-      '--output-format', 'json',
-      '--allow-all-tools',
-      '--no-custom-instructions',
-      '--no-color',
-      '--deny-tool', 'write',
-      '--deny-tool', 'shell',
-    ]
-    const child = spawn('copilot', args, { stdio: ['ignore', 'pipe', 'pipe'] })
-
-    let out = ''
-    let finalText = ''
-    let settled = false
-    const finish = (err?: Error) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      if (!child.killed) child.kill('SIGTERM')
-      if (err) reject(err)
-      else resolve(finalText)
-    }
-
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      out += chunk
-      let nl: number
-      while ((nl = out.indexOf('\n')) !== -1) {
-        const line = out.slice(0, nl).trim()
-        out = out.slice(nl + 1)
-        if (!line.startsWith('{')) continue
-        try {
-          const evt = JSON.parse(line)
-          if (evt.type === 'assistant.message' && typeof evt.data?.content === 'string') {
-            finalText = evt.data.content
-          }
-        } catch {
-          /* línea no-JSON o parcial, se ignora */
-        }
-      }
-    })
-    child.stderr.setEncoding('utf8')
-    let stderrOut = ''
-    child.stderr.on('data', (c: string) => (stderrOut += c))
-
-    child.on('error', (err) => finish(new Error(`No se pudo ejecutar copilot: ${err.message}`)))
-    child.on('close', (code) => {
-      if (code !== 0 && !finalText) {
-        finish(new Error(stderrOut.trim() || `copilot salió con código ${code}`))
-      } else {
-        finish()
-      }
-    })
-
-    const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), REFRESH_TIMEOUT_MS)
-  })
-}
-
-/**
- * Recarga los modelos desde Copilot (vía prompt no interactivo), actualiza la
- * caché y devuelve la lista. Puede devolver [] si la respuesta no se pudo parsear.
+ * Recarga los modelos desde Copilot (vía runOnce, con la política de seguridad y
+ * el cwd aislado de la capa de adaptadores), actualiza la caché y devuelve la
+ * lista. Puede devolver [] si la respuesta no se pudo parsear.
  */
 export async function refreshModels(): Promise<ModelOption[]> {
-  const output = await runModelCommand()
+  const output = await runOnce('copilot', LIST_MODELS_PROMPT, 'auto', REFRESH_TIMEOUT_MS)
   const models = parseModelsFromOutput(output)
   cachedModels = models
   modelIdSet = new Set(models.map((m) => m.id))

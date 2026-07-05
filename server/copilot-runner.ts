@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { getAgentTemplateBody, getSkillBody, getSkills } from './config-reader.ts'
 import { getAdapter, type LineHandlers } from './cli-adapters.ts'
+import { getPolicy, getSandboxCwd } from './cli-policy.ts'
 import type { AgentConfig, MemoryLink, ServerMessage } from './types.ts'
 
 const MAX_PARALLEL = 8
@@ -70,7 +71,7 @@ function buildPrompt(agent: AgentConfig, userPrompt: string, shared?: SharedCont
  * devuelve, para cada id de agente, la lista de miembros de su grupo (incluido
  * él mismo). Ids fuera de `agentIds` se ignoran.
  */
-function computeGroupMembers(agentIds: string[], links: MemoryLink[]): Map<string, string[]> {
+export function computeGroupMembers(agentIds: string[], links: MemoryLink[]): Map<string, string[]> {
   const parent = new Map(agentIds.map((id) => [id, id]))
   const find = (x: string): string => {
     let r = x
@@ -136,6 +137,12 @@ export class OfficeRunner {
     const batch = agents.slice(0, MAX_PARALLEL)
     send({ type: 'run-started', agentIds: batch.map((a) => a.id) })
 
+    // Purga la memoria de agentes que ya no están en el equipo (evita fugas).
+    const teamIds = new Set(agents.map((a) => a.id))
+    for (const id of lastAnswers.keys()) {
+      if (!teamIds.has(id)) lastAnswers.delete(id)
+    }
+
     const byId = new Map(batch.map((a) => [a.id, a]))
     const memberMap = computeGroupMembers(batch.map((a) => a.id), links)
 
@@ -173,12 +180,17 @@ export class OfficeRunner {
       send({ type: 'agent-update', agentId: agent.id, status: 'starting' })
 
       const adapter = getAdapter(agent.cli)
+      const policy = getPolicy(agent.cli)
       const fullPrompt = buildPrompt(agent, prompt, shared)
-      const args = adapter.runArgs(fullPrompt, agent.model)
+      // Args funcionales + flags de seguridad (solo-lectura) de la política.
+      const args = [...adapter.runArgs(fullPrompt, agent.model), ...policy.readOnlyArgs]
 
       let child: ChildProcessWithoutNullStreams
       try {
-        child = spawn(adapter.bin, args, { cwd: process.cwd() })
+        child = spawn(adapter.bin, args, {
+          cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
+          env: { ...process.env, ...policy.env },
+        })
       } catch (err) {
         send({
           type: 'agent-update',

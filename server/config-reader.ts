@@ -121,22 +121,30 @@ export function readMemoryLinks(): MemoryLink[] {
 }
 
 /**
+ * Sanea una lista de enlaces de memoria: descarta bucles, ids inexistentes y
+ * duplicados (sin dirección). Función pura, exportada para test.
+ */
+export function sanitizeMemoryLinks(links: MemoryLink[], validIds: Set<string>): MemoryLink[] {
+  const seen = new Set<string>()
+  const valid: MemoryLink[] = []
+  for (const [a, b] of links) {
+    if (a === b || !validIds.has(a) || !validIds.has(b)) continue
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    valid.push([a, b])
+  }
+  return valid
+}
+
+/**
  * Persiste los enlaces de memoria, conservando los agentes y descartando los
  * enlaces que referencien ids inexistentes o duplicados.
  */
 export function writeMemoryLinks(links: MemoryLink[]): void {
   const cur = readTeamFile()
   const ids = new Set(cur.agents.map((a) => a.id))
-  const seen = new Set<string>()
-  const valid: MemoryLink[] = []
-  for (const [a, b] of links) {
-    if (a === b || !ids.has(a) || !ids.has(b)) continue
-    const key = a < b ? `${a}|${b}` : `${b}|${a}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    valid.push([a, b])
-  }
-  writeTeamFile({ agents: cur.agents, memoryLinks: valid })
+  writeTeamFile({ agents: cur.agents, memoryLinks: sanitizeMemoryLinks(links, ids) })
 }
 
 // ---- Creación de skills y plantillas desde la app ----

@@ -1,14 +1,10 @@
-import { runOnce, checkAllAvailability } from './cli-adapters.ts'
-import type { AgentCli } from './types.ts'
+import { runOnce, pickAvailableCli } from './cli-adapters.ts'
 
 /** Respuesta individual de un especialista dentro de una ronda. */
 export interface AnswerInput {
   name: string
   text: string
 }
-
-/** Orden de preferencia de CLI para la síntesis (el primero disponible gana). */
-const PREFERENCE: AgentCli[] = ['copilot', 'claude', 'opencode']
 
 /**
  * Combina las respuestas de varios especialistas en una conclusión unificada.
@@ -17,9 +13,7 @@ const PREFERENCE: AgentCli[] = ['copilot', 'claude', 'opencode']
  * texto de la conclusión.
  */
 export async function synthesizeAnswers(userPrompt: string, answers: AnswerInput[]): Promise<string> {
-  const status = await checkAllAvailability()
-  const cli = PREFERENCE.find((c) => status[c]?.available)
-  if (!cli) throw new Error('No hay ningún CLI de agente disponible para la síntesis.')
+  const cli = await pickAvailableCli()
 
   const block = answers
     .filter((a) => a.text.trim() !== '')

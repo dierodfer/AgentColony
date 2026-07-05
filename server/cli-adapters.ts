@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { getPolicy, getSandboxCwd } from './cli-policy.ts'
 import type { AgentCli } from './types.ts'
 
 /**
@@ -65,8 +66,8 @@ function stripAnsi(s: string): string {
   return s.replace(/\[[0-9;]*m/g, '')
 }
 
-/** Extrae el primer objeto JSON balanceado de un texto (o null). */
-function firstJsonObject(raw: string): unknown {
+/** Extrae el primer objeto JSON balanceado de un texto (o null). Exportada para test. */
+export function firstJsonObject(raw: string): unknown {
   const start = raw.indexOf('{')
   if (start === -1) return null
   let depth = 0
@@ -103,6 +104,8 @@ const copilotAdapter: CliAdapter = {
   bin: 'copilot',
   versionArgs: ['--version'],
   runArgs(prompt, model) {
+    // Solo args funcionales. La seguridad (--deny-tool write/shell) la añade la
+    // política de ejecución (server/cli-policy.ts).
     return [
       '-p', prompt,
       '--model', model,
@@ -110,9 +113,6 @@ const copilotAdapter: CliAdapter = {
       '--allow-all-tools',
       '--no-custom-instructions',
       '--no-color',
-      // Q&A puro: bloqueamos edición de archivos y shell (la app no edita).
-      '--deny-tool', 'write',
-      '--deny-tool', 'shell',
     ]
   },
   onLine(line, state, h) {
@@ -188,7 +188,9 @@ const claudeAdapter: CliAdapter = {
   bin: 'claude',
   versionArgs: ['--version'],
   runArgs(prompt, model) {
-    const args = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'plan']
+    // Solo args funcionales. El modo solo-lectura (dontAsk + disallowedTools) lo
+    // añade la política de ejecución (server/cli-policy.ts).
+    const args = ['-p', prompt, '--output-format', 'json']
     if (model && model !== 'auto') args.push('--model', model)
     return args
   },
@@ -268,7 +270,11 @@ export function checkAvailability(cli: AgentCli): Promise<AvailabilityResult> {
 
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(adapter.bin, adapter.versionArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
+      // cwd aislado por consistencia; el chequeo solo ejecuta `--version`.
+      child = spawn(adapter.bin, adapter.versionArgs, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: getPolicy(cli).isolateCwd ? getSandboxCwd() : process.cwd(),
+      })
     } catch (e) {
       resolve({ cli, available: false, error: (e as Error).message })
       return
@@ -304,6 +310,20 @@ export async function checkAllAvailability(): Promise<Record<AgentCli, Availabil
   return Object.fromEntries(results.map((r) => [r.cli, r])) as Record<AgentCli, AvailabilityResult>
 }
 
+/** Orden de preferencia de CLI para tareas internas (el primero disponible gana). */
+export const CLI_PREFERENCE: AgentCli[] = ['copilot', 'claude', 'opencode']
+
+/**
+ * Elige el primer CLI disponible según CLI_PREFERENCE (para tareas one-off como
+ * la generación de plantillas o la síntesis). Lanza si no hay ninguno.
+ */
+export async function pickAvailableCli(): Promise<AgentCli> {
+  const status = await checkAllAvailability()
+  const cli = CLI_PREFERENCE.find((c) => status[c]?.available)
+  if (!cli) throw new Error('No hay ningún CLI de agente disponible.')
+  return cli
+}
+
 /**
  * Ejecuta una consulta puntual (no-streaming) contra un CLI y resuelve con el
  * texto final. Reutiliza el mismo parseo de cada adaptador que el runner.
@@ -331,9 +351,13 @@ export function runOnce(cli: AgentCli, prompt: string, model = 'auto', timeoutMs
       },
     }
 
+    const policy = getPolicy(cli)
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(adapter.bin, adapter.runArgs(prompt, model), { cwd: process.cwd() })
+      child = spawn(adapter.bin, [...adapter.runArgs(prompt, model), ...policy.readOnlyArgs], {
+        cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
+        env: { ...process.env, ...policy.env },
+      })
     } catch (e) {
       reject(new Error(`No se pudo iniciar ${adapter.bin}: ${(e as Error).message}`))
       return

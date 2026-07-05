@@ -1,4 +1,12 @@
-import type { AgentConfig, AgentTemplate, ModelOption, SkillInfo } from './types'
+import type { AgentCli, AgentConfig, AgentTemplate, MemoryLink, ModelOption, SkillInfo } from './types'
+
+/** Disponibilidad de un CLI de agente. */
+export interface CliAvailability {
+  cli: AgentCli
+  available: boolean
+  version?: string
+  error?: string
+}
 
 // Wrappers tipados sobre las rutas REST que expone el plugin de Vite.
 
@@ -57,4 +65,16 @@ export const api = {
 
   generateTemplate: (data: { prompt: string; model?: string }) =>
     sendJson<AgentTemplate>('/api/templates/generate', 'POST', data),
+
+  // ---- Memoria compartida ----
+  getMemory: () => getJson<MemoryLink[]>('/api/memory'),
+  saveMemory: (links: MemoryLink[]) => sendJson<MemoryLink[]>('/api/memory', 'PUT', { links }),
+
+  // ---- Disponibilidad de CLIs ----
+  cliStatus: () => getJson<Record<AgentCli, CliAvailability>>('/api/cli/status'),
+  cliCheck: (cli: AgentCli) => sendJson<CliAvailability>('/api/cli/check', 'POST', { cli }),
+
+  // ---- Síntesis del equipo ----
+  synthesize: (data: { prompt: string; answers: { name: string; text: string }[] }) =>
+    sendJson<{ text: string }>('/api/synthesize', 'POST', data),
 }

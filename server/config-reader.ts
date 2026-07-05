@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { join, basename } from 'node:path'
-import type { AgentTemplate, SkillInfo, AgentConfig } from './types.ts'
+import type { AgentTemplate, SkillInfo, AgentConfig, MemoryLink } from './types.ts'
 
 // La app se ejecuta desde la raíz del proyecto (el plugin de Vite corre en ese
 // cwd), donde viven .agents/ (plantillas) y .skills/.
@@ -73,21 +73,70 @@ export function getSkillBody(id: string): string {
   return parseFrontmatter(readFileSync(path, 'utf8')).body
 }
 
-/** Lee el equipo configurado desde .tmp/agent.config.json. Vacío si no existe. */
-export function readTeam(): AgentConfig[] {
-  if (!existsSync(TEAM_FILE)) return []
+/** Estructura del fichero de equipo: agentes + enlaces de memoria. */
+interface TeamFile {
+  agents: AgentConfig[]
+  memoryLinks: MemoryLink[]
+}
+
+/** Lee el fichero de equipo completo (agentes + enlaces). Vacío si no existe. */
+function readTeamFile(): TeamFile {
+  if (!existsSync(TEAM_FILE)) return { agents: [], memoryLinks: [] }
   try {
     const data = JSON.parse(readFileSync(TEAM_FILE, 'utf8'))
-    return Array.isArray(data.agents) ? data.agents : []
+    return {
+      agents: Array.isArray(data.agents) ? data.agents : [],
+      memoryLinks: Array.isArray(data.memoryLinks) ? data.memoryLinks : [],
+    }
   } catch {
-    return []
+    return { agents: [], memoryLinks: [] }
   }
 }
 
-/** Persiste el equipo en .tmp/agent.config.json (crea la carpeta si falta). */
-export function writeTeam(agents: AgentConfig[]): void {
+/** Persiste el fichero de equipo completo (crea la carpeta si falta). */
+function writeTeamFile(file: TeamFile): void {
   mkdirSync(TEAM_DIR, { recursive: true })
-  writeFileSync(TEAM_FILE, JSON.stringify({ agents }, null, 2) + '\n', 'utf8')
+  writeFileSync(TEAM_FILE, JSON.stringify(file, null, 2) + '\n', 'utf8')
+}
+
+/** Lee el equipo configurado desde .tmp/agent.config.json. Vacío si no existe. */
+export function readTeam(): AgentConfig[] {
+  return readTeamFile().agents
+}
+
+/**
+ * Persiste el equipo, conservando (y saneando) los enlaces de memoria: purga
+ * los que referencien agentes que ya no existen.
+ */
+export function writeTeam(agents: AgentConfig[]): void {
+  const cur = readTeamFile()
+  const ids = new Set(agents.map((a) => a.id))
+  const memoryLinks = cur.memoryLinks.filter(([a, b]) => ids.has(a) && ids.has(b))
+  writeTeamFile({ agents, memoryLinks })
+}
+
+/** Enlaces de memoria entre agentes. Vacío si no hay. */
+export function readMemoryLinks(): MemoryLink[] {
+  return readTeamFile().memoryLinks
+}
+
+/**
+ * Persiste los enlaces de memoria, conservando los agentes y descartando los
+ * enlaces que referencien ids inexistentes o duplicados.
+ */
+export function writeMemoryLinks(links: MemoryLink[]): void {
+  const cur = readTeamFile()
+  const ids = new Set(cur.agents.map((a) => a.id))
+  const seen = new Set<string>()
+  const valid: MemoryLink[] = []
+  for (const [a, b] of links) {
+    if (a === b || !ids.has(a) || !ids.has(b)) continue
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    valid.push([a, b])
+  }
+  writeTeamFile({ agents: cur.agents, memoryLinks: valid })
 }
 
 // ---- Creación de skills y plantillas desde la app ----

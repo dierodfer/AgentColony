@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { AgentRobot } from './AgentIdentity'
+import { CliBadge } from './CliBadge'
 import { StatusBadge } from './StatusBadge'
 import { cleanText } from '../lib/text'
 import type { AgentConfig, AgentRuntime } from '../types'
@@ -113,6 +114,7 @@ export function AgentCard({
   model,
   accent,
   runtime,
+  available,
   onEdit,
   onDelete,
 }: {
@@ -121,6 +123,7 @@ export function AgentCard({
   model: string
   accent: string
   runtime: AgentRuntime | undefined
+  available?: boolean
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -181,7 +184,12 @@ export function AgentCard({
 
       {/* Robot prominente sobresaliendo de la card */}
       <div className="absolute -top-12 left-1/2 z-10 -translate-x-1/2">
-        <AgentRobot id={agent.avatar} status={rt.status} size={89} />
+        <div className="relative">
+          <AgentRobot id={agent.avatar} status={rt.status} size={89} />
+          <span className="absolute -bottom-0.5 -right-0.5">
+            <CliBadge cli={agent.cli} size={26} available={available} />
+          </span>
+        </div>
       </div>
 
       {/* Nombre + controles */}

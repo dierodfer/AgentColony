@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" alt="AgentColony logo" width="160" />
+</p>
+
 # AgentColony
 
 [![CI](https://github.com/dierodfer/AgentColony/actions/workflows/ci.yml/badge.svg)](https://github.com/dierodfer/AgentColony/actions/workflows/ci.yml)

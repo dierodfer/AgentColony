@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { firstJsonObject } from './cli-adapters.ts'
+import { firstJsonObject, parseOpencodeModelLines } from './cli-adapters.ts'
 
 describe('firstJsonObject', () => {
   it('extrae un objeto JSON envuelto en texto', () => {
@@ -20,5 +20,19 @@ describe('firstJsonObject', () => {
   it('devuelve null si no hay objeto', () => {
     expect(firstJsonObject('sin json aquí')).toBeNull()
     expect(firstJsonObject('{ roto sin cerrar')).toBeNull()
+  })
+})
+
+describe('parseOpencodeModelLines', () => {
+  it('devuelve una línea por id, sin vacías', () => {
+    const raw = 'github-copilot/gpt-5.4-mini\ngithub-copilot/claude-sonnet-5\n\n'
+    expect(parseOpencodeModelLines(raw)).toEqual([
+      'github-copilot/gpt-5.4-mini',
+      'github-copilot/claude-sonnet-5',
+    ])
+  })
+
+  it('quita códigos ANSI', () => {
+    expect(parseOpencodeModelLines('\x1b[36mgithub-copilot/gpt-5.4\x1b[0m')).toEqual(['github-copilot/gpt-5.4'])
   })
 })

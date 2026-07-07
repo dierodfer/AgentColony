@@ -1,15 +1,20 @@
-import { runOnce } from './cli-adapters.ts'
+import { runOnce, listOpencodeModels } from './cli-adapters.ts'
 import type { AgentCli, ModelOption } from './types.ts'
 
-// Cada CLI tiene su propio catálogo de modelos. Se obtienen preguntándole al
-// propio CLI en modo no interactivo (vía runOnce, misma capa de adaptadores que
-// el runner) por los ids que acepta su flag --model, forzando salida JSON pura.
-// NO se consulta automáticamente: solo bajo demanda desde el botón "Recargar
-// modelos" del formulario de agente (endpoint POST /api/models/refresh con el
-// CLI seleccionado). Cada catálogo resuelto se cachea en memoria durante la
-// sesión del servidor; hasta la primera recarga, la lista de ese CLI está vacía.
+// Cada CLI tiene su propio catálogo de modelos. opencode expone un comando
+// nativo (`opencode models`, ver listOpencodeModels) que se usa directamente.
+// copilot y claude no tienen un comando así: se les pregunta en modo no
+// interactivo (vía runOnce) por los ids que acepta su flag --model, forzando
+// salida JSON pura. NO se consulta automáticamente: solo bajo demanda desde el
+// botón "Recargar modelos" del formulario de agente (endpoint POST
+// /api/models/refresh con el CLI seleccionado). Cada catálogo resuelto se
+// cachea en memoria durante la sesión del servidor; hasta la primera recarga,
+// la lista de ese CLI está vacía.
 
-const REFRESH_TIMEOUT_MS = 30_000
+// copilot necesita bastante más margen que el resto: incluso sin herramientas
+// (ver abajo) tarda ~30s en varias vueltas de razonamiento interno antes de
+// responder con el listado.
+const REFRESH_TIMEOUT_MS = 60_000
 
 const LIST_MODELS_PROMPT =
   'List every AI model id you can be configured to use (the exact ids accepted ' +
@@ -66,14 +71,31 @@ export function isValidModel(cli: AgentCli, id: string): boolean {
   return modelIdSets.get(cli)?.has(id) ?? false
 }
 
+/** Etiqueta legible de un id de opencode (formato "provider/model"). */
+function labelForOpencodeId(id: string): string {
+  const short = id.slice(id.lastIndexOf('/') + 1)
+  return labelFor(short)
+}
+
 /**
- * Recarga los modelos del CLI indicado (vía runOnce, con la política de
- * seguridad y el cwd aislado de la capa de adaptadores), actualiza su caché y
- * devuelve la lista. Puede devolver [] si la respuesta no se pudo parsear.
+ * Recarga los modelos del CLI indicado y actualiza su caché. opencode usa su
+ * comando nativo (rápido y determinístico); copilot/claude se resuelven vía
+ * runOnce preguntándole al agente (sin herramientas disponibles, para que
+ * responda directo en vez de ponerse a explorar/buscar). Puede devolver [] si
+ * la respuesta no se pudo parsear.
  */
 export async function refreshModels(cli: AgentCli): Promise<ModelOption[]> {
-  const output = await runOnce(cli, LIST_MODELS_PROMPT, 'auto', REFRESH_TIMEOUT_MS)
-  const models = parseModelsFromOutput(output)
+  let models: ModelOption[]
+  if (cli === 'opencode') {
+    const ids = await listOpencodeModels()
+    models = ids.map((id) => ({ id, label: labelForOpencodeId(id) }))
+  } else {
+    // Sin herramientas disponibles: copilot, si las tiene, se pone a navegar
+    // documentación en vez de responder, y nunca cierra a tiempo.
+    const extraArgs = cli === 'copilot' ? ['--available-tools='] : []
+    const output = await runOnce(cli, LIST_MODELS_PROMPT, 'auto', REFRESH_TIMEOUT_MS, extraArgs)
+    models = parseModelsFromOutput(output)
+  }
   cachedModels.set(cli, models)
   modelIdSets.set(cli, new Set(models.map((m) => m.id)))
   return models

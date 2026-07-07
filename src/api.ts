@@ -30,8 +30,8 @@ async function sendJson<T>(url: string, method: string, body?: unknown): Promise
 }
 
 export const api = {
-  getModels: () => getJson<ModelOption[]>('/api/models'),
-  refreshModels: () => sendJson<ModelOption[]>('/api/models/refresh', 'POST'),
+  getModels: (cli: AgentCli) => getJson<ModelOption[]>(`/api/models?cli=${encodeURIComponent(cli)}`),
+  refreshModels: (cli: AgentCli) => sendJson<ModelOption[]>('/api/models/refresh', 'POST', { cli }),
   getSkills: () => getJson<SkillInfo[]>('/api/skills'),
   getTemplates: () => getJson<AgentTemplate[]>('/api/templates'),
   getAgents: () => getJson<AgentConfig[]>('/api/agents'),

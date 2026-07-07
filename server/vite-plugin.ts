@@ -69,11 +69,11 @@ function validateAgent(body: unknown): { agent: Omit<AgentConfig, 'id'> } | { er
 
   const model = typeof b?.model === 'string' ? b.model : ''
   if (!model) return { error: 'El modelo es obligatorio.' }
-  // Solo validamos contra el catálogo si ya se han recargado modelos; si aún no
-  // (caché vacía), aceptamos cualquier id para no bloquear edición de agentes.
-  // El catálogo de modelos es de Copilot; para otros CLIs no lo aplicamos.
-  if (cli === 'copilot' && getModels().length > 0 && !isValidModel(model)) {
-    return { error: `El modelo "${model}" no es válido.` }
+  // Solo validamos contra el catálogo del CLI si ya se han recargado sus
+  // modelos; si aún no (caché vacía), aceptamos cualquier id para no bloquear
+  // la edición de agentes.
+  if (getModels(cli).length > 0 && !isValidModel(cli, model)) {
+    return { error: `El modelo "${model}" no es válido para ${cli}.` }
   }
 
   const validSkills = new Set(getSkills().map((s) => s.id))
@@ -101,13 +101,25 @@ export function officeApiPlugin(): Plugin {
 
         try {
           // ---- Catálogos ----
-          if (method === 'GET' && path === '/api/models') return sendJson(res, 200, getModels())
+          if (method === 'GET' && path === '/api/models') {
+            const q = new URLSearchParams(url.split('?')[1] ?? '')
+            const cli = q.get('cli') ?? 'copilot'
+            if (!CLI_IDS.includes(cli as AgentCli)) {
+              return sendJson(res, 400, { error: 'CLI no reconocido.' })
+            }
+            return sendJson(res, 200, getModels(cli as AgentCli))
+          }
           if (method === 'GET' && path === '/api/skills') return sendJson(res, 200, getSkills())
 
-          // ---- Recargar modelos desde Copilot (/model), bajo demanda ----
+          // ---- Recargar modelos del CLI indicado, bajo demanda ----
           if (method === 'POST' && path === '/api/models/refresh') {
+            const b = (await readJson(req)) as { cli?: string }
+            const cli = b.cli ?? 'copilot'
+            if (!CLI_IDS.includes(cli as AgentCli)) {
+              return sendJson(res, 400, { error: 'CLI no reconocido.' })
+            }
             try {
-              return sendJson(res, 200, await refreshModels())
+              return sendJson(res, 200, await refreshModels(cli as AgentCli))
             } catch (e) {
               return sendJson(res, 502, { error: (e as Error).message })
             }

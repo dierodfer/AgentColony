@@ -1,43 +1,13 @@
 import type { CSSProperties } from 'react'
 import type { AgentCli } from '../types'
 import { cliInfo } from '../lib/clis'
+import { CliLogo } from './CliLogo'
 
 /**
- * Insignia pequeña con la marca del CLI que ejecuta al agente, para superponer
- * en una esquina del robot. Marcas propias estilizadas (no logos de terceros):
- * copilot = anillo/gafas, claude = destello, opencode = corchetes </>.
- * Opcionalmente muestra un punto de disponibilidad (verde/rojo).
+ * Insignia pequeña con el logo oficial del CLI que ejecuta al agente, para
+ * superponer en una esquina del robot. Opcionalmente muestra un punto de
+ * disponibilidad (verde/rojo).
  */
-
-function CliMark({ cli }: { cli: AgentCli }) {
-  if (cli === 'claude') {
-    // Destello de 4 puntas (asterisco redondeado).
-    return (
-      <path
-        d="M8 2.6c.5 2 .9 2.4 2.9 2.9-2 .5-2.4.9-2.9 2.9-.5-2-.9-2.4-2.9-2.9 2-.5 2.4-.9 2.9-2.9z"
-        transform="translate(0 0.5)"
-        fill="currentColor"
-      />
-    )
-  }
-  if (cli === 'opencode') {
-    // Corchetes </>
-    return (
-      <g fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6.4 5.5 4.3 8l2.1 2.5" />
-        <path d="M9.6 5.5 11.7 8l-2.1 2.5" />
-      </g>
-    )
-  }
-  // copilot: anillo con dos "ojos".
-  return (
-    <g>
-      <circle cx="8" cy="8" r="3.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <circle cx="6.7" cy="8" r="0.9" fill="currentColor" />
-      <circle cx="9.3" cy="8" r="0.9" fill="currentColor" />
-    </g>
-  )
-}
 
 export function CliBadge({
   cli,
@@ -66,9 +36,7 @@ export function CliBadge({
         color: meta.color,
       }}
     >
-      <svg viewBox="0 0 16 16" width={size * 0.72} height={size * 0.72} aria-hidden>
-        <CliMark cli={cli} />
-      </svg>
+      <CliLogo cli={cli} size={size * 0.6} />
       {dot && (
         <span
           className="absolute -right-0.5 -top-0.5 rounded-full ring-2"

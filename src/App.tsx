@@ -33,13 +33,17 @@ export default function App() {
   const [view, setView] = useState<SectionId>('agentes')
   const [pendingPrompt, setPendingPrompt] = useState('')
 
-  // Modelo por defecto del formulario de creación: preferimos un "GPT mini" si
-  // Copilot lo ofrece; si no, el primero disponible. Se resuelve una vez
-  // consultados los modelos a Copilot y se guarda en esta variable de la vista.
+  // Modelo por defecto del formulario de creación (los nuevos agentes empiezan
+  // en copilot): preferimos un "GPT mini" si Copilot lo ofrece; si no, el
+  // primero de su catálogo, y en última instancia "auto".
+  const copilotModels = data.modelsByCli.copilot
   const defaultModel = useMemo(() => {
-    const gptMini = data.models.find((m) => /gpt.*mini/i.test(m.id))
-    return gptMini?.id ?? data.models[0]?.id ?? 'auto'
-  }, [data.models])
+    const gptMini = copilotModels?.find((m) => /gpt.*mini/i.test(m.id))
+    return gptMini?.id ?? copilotModels?.[0]?.id ?? 'auto'
+  }, [copilotModels])
+
+  // Lista plana de todos los modelos conocidos (solo para mostrar etiquetas).
+  const allModels = useMemo(() => Object.values(data.modelsByCli).flat(), [data.modelsByCli])
 
   const handleAsk = (prompt: string) => {
     setQuestion(prompt)
@@ -160,7 +164,7 @@ export default function App() {
                 agents={data.agents}
                 runtime={runtime}
                 templates={data.templates}
-                models={data.models}
+                models={allModels}
                 cliStatus={data.cliStatus}
                 loading={data.loading}
                 canAdd={data.agents.length < MAX_AGENTS}
@@ -185,7 +189,7 @@ export default function App() {
             agents={data.agents}
             runtime={runtime}
             templates={data.templates}
-            models={data.models}
+            models={allModels}
             onAsk={handleAsk}
             onCancel={cancel}
             isRunning={isRunning}
@@ -224,9 +228,9 @@ export default function App() {
           initial={editing.mode === 'edit'
             ? { name: editing.agent.name, avatar: editing.agent.avatar, agentFile: editing.agent.agentFile, model: editing.agent.model, skills: [...editing.agent.skills], cli: editing.agent.cli ?? 'copilot' }
             : newDraft()}
-          isNew={editing.mode === 'new'}
-          models={data.models}
+          modelsByCli={data.modelsByCli}
           onReloadModels={data.refreshModels}
+          cliStatus={data.cliStatus}
           skills={data.skills}
           templates={data.templates}
           takenNames={data.agents

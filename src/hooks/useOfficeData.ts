@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api'
-import type { AgentConfig, AgentTemplate, ModelOption, SkillInfo } from '../types'
+import { api, type CliAvailability } from '../api'
+import type { AgentCli, AgentConfig, AgentTemplate, MemoryLink, ModelOption, SkillInfo } from '../types'
 
 /**
  * Carga los catálogos (modelos, skills, plantillas) y el equipo de agentes,
@@ -11,6 +11,8 @@ export function useOfficeData() {
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [templates, setTemplates] = useState<AgentTemplate[]>([])
   const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [memoryLinks, setMemoryLinks] = useState<MemoryLink[]>([])
+  const [cliStatus, setCliStatus] = useState<Record<AgentCli, CliAvailability> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,23 +31,37 @@ export function useOfficeData() {
     let cancelled = false
     ;(async () => {
       try {
-        const [m, s, t, a] = await Promise.all([
+        const [m, s, t, a, links] = await Promise.all([
           api.getModels(),
           api.getSkills(),
           api.getTemplates(),
           api.getAgents(),
+          api.getMemory(),
         ])
         if (cancelled) return
         setModels(m)
         setSkills(s)
         setTemplates(t)
         setAgents(a)
+        setMemoryLinks(links)
       } catch (err) {
         if (!cancelled) setError((err as Error).message)
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Disponibilidad de CLIs (best-effort, no bloquea la carga inicial).
+  useEffect(() => {
+    let cancelled = false
+    api
+      .cliStatus()
+      .then((s) => !cancelled && setCliStatus(s))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -71,9 +87,22 @@ export function useOfficeData() {
     async (id: string) => {
       await api.deleteAgent(id)
       await reloadAgents()
+      // El servidor purga los enlaces del agente borrado: refrescamos.
+      setMemoryLinks(await api.getMemory())
     },
     [reloadAgents],
   )
+
+  // Guarda los enlaces de memoria (optimista + persistencia en backend).
+  const saveMemoryLinks = useCallback(async (links: MemoryLink[]) => {
+    setMemoryLinks(links)
+    try {
+      setMemoryLinks(await api.saveMemory(links))
+    } catch {
+      // Si falla, recargamos el estado real del servidor.
+      setMemoryLinks(await api.getMemory().catch(() => links))
+    }
+  }, [])
 
   // Recarga la lista de modelos desde Copilot (bajo demanda, no automático).
   const refreshModels = useCallback(async () => {
@@ -105,6 +134,8 @@ export function useOfficeData() {
     skills,
     templates,
     agents,
+    memoryLinks,
+    cliStatus,
     loading,
     error,
     reloadCatalogs,
@@ -112,6 +143,7 @@ export function useOfficeData() {
     createAgent,
     updateAgent,
     deleteAgent,
+    saveMemoryLinks,
     createSkill,
     createTemplate,
   }

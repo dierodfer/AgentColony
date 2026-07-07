@@ -1,6 +1,16 @@
-import { spawn } from 'node:child_process'
+import { runOnce, pickAvailableCli } from './cli-adapters.ts'
 import { createTemplate, createSkill } from './config-reader.ts'
 import type { AgentTemplate, SkillInfo } from './types.ts'
+
+/**
+ * Genera texto con IA usando el primer CLI disponible (vía la capa de
+ * adaptadores: seguridad + cwd aislado incluidos). El modelo solo se pasa a
+ * copilot; para otros CLIs se deja "auto" (su id de modelo difiere).
+ */
+async function generateWithAgent(prompt: string, model: string): Promise<string> {
+  const cli = await pickAvailableCli()
+  return runOnce(cli, prompt, cli === 'copilot' ? model : 'auto', 60_000)
+}
 
 const META_PROMPT = `You are an expert AI Agent Architect.
 
@@ -137,42 +147,11 @@ export async function generateAgentTemplate(
   model = 'gpt-5.4-mini',
 ): Promise<AgentTemplate> {
   const prompt = META_PROMPT.replace('{PROMPT}', userPrompt)
-
-  const output = await new Promise<string>((resolve, reject) => {
-    const child = spawn('copilot', [
-      '-p', prompt,
-      '--model', model,
-      '--allow-all-tools',
-      '--no-custom-instructions',
-      '--no-color',
-      '--silent',
-      '--deny-tool', 'write',
-      '--deny-tool', 'shell',
-    ], { cwd: process.cwd() })
-
-    let stdout = ''
-    let stderr = ''
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (d: string) => { stdout += d })
-    child.stderr.on('data', (d: string) => { stderr += d })
-
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM')
-      reject(new Error('Timeout generando template (60s).'))
-    }, 60_000)
-
-    child.on('error', (err) => { clearTimeout(timer); reject(err) })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      if (code === 0) resolve(stdout)
-      else reject(new Error(stderr.trim() || `Copilot CLI salió con código ${code}.`))
-    })
-  })
+  const output = await generateWithAgent(prompt, model)
 
   const parsed = parseFrontmatter(output)
   if (!parsed) {
-    throw new Error('La respuesta de Copilot no tiene el formato esperado (frontmatter ---name--- + body).')
+    throw new Error('La respuesta del agente no tiene el formato esperado (frontmatter ---name--- + body).')
   }
 
   return createTemplate(parsed.name, parsed.body)
@@ -304,42 +283,11 @@ export async function generateSkill(
   model = 'gpt-5.4-mini',
 ): Promise<SkillInfo> {
   const prompt = SKILL_META_PROMPT.replace('{PROMPT}', userPrompt)
-
-  const output = await new Promise<string>((resolve, reject) => {
-    const child = spawn('copilot', [
-      '-p', prompt,
-      '--model', model,
-      '--allow-all-tools',
-      '--no-custom-instructions',
-      '--no-color',
-      '--silent',
-      '--deny-tool', 'write',
-      '--deny-tool', 'shell',
-    ], { cwd: process.cwd() })
-
-    let stdout = ''
-    let stderr = ''
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (d: string) => { stdout += d })
-    child.stderr.on('data', (d: string) => { stderr += d })
-
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM')
-      reject(new Error('Timeout generando skill (60s).'))
-    }, 60_000)
-
-    child.on('error', (err) => { clearTimeout(timer); reject(err) })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      if (code === 0) resolve(stdout)
-      else reject(new Error(stderr.trim() || `Copilot CLI salió con código ${code}.`))
-    })
-  })
+  const output = await generateWithAgent(prompt, model)
 
   const parsed = parseFrontmatter(output)
   if (!parsed) {
-    throw new Error('La respuesta de Copilot no tiene el formato esperado (frontmatter ---name--- + body).')
+    throw new Error('La respuesta del agente no tiene el formato esperado (frontmatter ---name--- + body).')
   }
 
   return createSkill(parsed.name, parsed.body)

@@ -9,6 +9,7 @@ import { TemplatesView } from './components/TemplatesView'
 import { Sidebar, type SectionId } from './components/Sidebar'
 import { AgentEditor } from './components/AgentEditor'
 import { UsageSummary } from './components/UsageSummary'
+import { SynthesisPanel } from './components/SynthesisPanel'
 import { ACCENTS } from './components/AgentIdentity'
 import type { AgentConfig, AgentDraft, AgentStatus } from './types'
 
@@ -69,6 +70,7 @@ export default function App() {
       agentFile: data.templates[0]?.file ?? '',
       model: defaultModel,
       skills: [],
+      cli: 'copilot',
     }
   }
 
@@ -89,6 +91,11 @@ export default function App() {
   const avgElapsedMs = finishedRts.length > 0
     ? finishedRts.reduce((sum, rt) => sum + rt.elapsedMs!, 0) / finishedRts.length
     : null
+
+  // Respuestas terminadas (con texto) para la síntesis del equipo.
+  const answers = data.agents
+    .map((a) => ({ name: a.name, text: runtime[a.id]?.status === 'finished' ? runtime[a.id]?.text ?? '' : '' }))
+    .filter((a) => a.text.trim() !== '')
 
   return (
     <div className="app-shell flex h-screen overflow-hidden text-white/90">
@@ -141,6 +148,11 @@ export default function App() {
                 history={history.items}
                 onSelectPrompt={setPendingPrompt}
               />
+              {answers.length >= 2 && (
+                <div className="mt-4">
+                  <SynthesisPanel question={question} answers={answers} />
+                </div>
+              )}
             </section>
 
             <section className="mt-8">
@@ -149,6 +161,7 @@ export default function App() {
                 runtime={runtime}
                 templates={data.templates}
                 models={data.models}
+                cliStatus={data.cliStatus}
                 loading={data.loading}
                 canAdd={data.agents.length < MAX_AGENTS}
                 onAdd={openCreate}
@@ -187,6 +200,11 @@ export default function App() {
             runHistory={runHistory}
             history={history.items}
             onSelectPrompt={setPendingPrompt}
+            memoryLinks={data.memoryLinks}
+            onSaveMemoryLinks={data.saveMemoryLinks}
+            cliStatus={data.cliStatus}
+            question={question}
+            answers={answers}
           />
         </main>
       )}
@@ -204,7 +222,7 @@ export default function App() {
       {editing && (
         <AgentEditor
           initial={editing.mode === 'edit'
-            ? { name: editing.agent.name, avatar: editing.agent.avatar, agentFile: editing.agent.agentFile, model: editing.agent.model, skills: [...editing.agent.skills] }
+            ? { name: editing.agent.name, avatar: editing.agent.avatar, agentFile: editing.agent.agentFile, model: editing.agent.model, skills: [...editing.agent.skills], cli: editing.agent.cli ?? 'copilot' }
             : newDraft()}
           isNew={editing.mode === 'new'}
           models={data.models}

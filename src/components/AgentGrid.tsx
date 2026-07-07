@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { AgentCard } from './AgentCard'
 import { accentOf } from './AgentIdentity'
-import type { AgentConfig, AgentRuntime, AgentTemplate, ModelOption } from '../types'
+import type { CliAvailability } from '../api'
+import type { AgentCli, AgentConfig, AgentRuntime, AgentTemplate, ModelOption } from '../types'
 
 const MAX_AGENTS = 8
 
@@ -14,6 +15,7 @@ export function AgentGrid({
   runtime,
   templates,
   models,
+  cliStatus,
   loading,
   canAdd,
   onAdd,
@@ -24,6 +26,7 @@ export function AgentGrid({
   runtime: Record<string, AgentRuntime>
   templates: AgentTemplate[]
   models: ModelOption[]
+  cliStatus: Record<AgentCli, CliAvailability> | null
   loading: boolean
   canAdd: boolean
   onAdd: () => void
@@ -76,6 +79,7 @@ export function AgentGrid({
             model={modelLabelOf(agent.model)}
             accent={accentOf(agent.avatar)}
             runtime={runtime[agent.id]}
+            available={cliStatus ? cliStatus[agent.cli]?.available : undefined}
             onEdit={() => onEdit(agent)}
             onDelete={() => onDelete(agent)}
           />

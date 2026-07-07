@@ -25,6 +25,9 @@ export interface AgentTemplate {
   name: string
 }
 
+/** CLI de agente que ejecuta las respuestas. */
+export type AgentCli = 'copilot' | 'claude' | 'opencode'
+
 export interface AgentConfig {
   id: string
   name: string
@@ -32,7 +35,12 @@ export interface AgentConfig {
   agentFile: string
   model: string
   skills: string[]
+  /** CLI que ejecuta al agente (por defecto "copilot"). */
+  cli: AgentCli
 }
+
+/** Enlace de memoria entre dos agentes (par de ids). */
+export type MemoryLink = [string, string]
 
 /** Datos de un agente sin id (para crear/editar). */
 export type AgentDraft = Omit<AgentConfig, 'id'>

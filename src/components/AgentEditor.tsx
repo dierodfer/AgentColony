@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
+import { CliBadge } from './CliBadge'
+import { CLIS } from '../lib/clis'
+import { api, type CliAvailability } from '../api'
 import type {
+  AgentCli,
   AgentDraft,
   AgentTemplate,
   ModelOption,
@@ -146,6 +150,20 @@ export function AgentEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingModels, setLoadingModels] = useState(false)
+  const [checkingCli, setCheckingCli] = useState(false)
+  const [cliCheck, setCliCheck] = useState<CliAvailability | null>(null)
+
+  const checkCli = async () => {
+    setCheckingCli(true)
+    setError(null)
+    try {
+      setCliCheck(await api.cliCheck(draft.cli))
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setCheckingCli(false)
+    }
+  }
 
   const reloadModels = async () => {
     setLoadingModels(true)
@@ -246,6 +264,57 @@ export function AgentEditor({
         {nameTaken && (
           <p className="mb-4 text-xs text-st-error">Ya existe un especialista con ese nombre.</p>
         )}
+
+        {/* Agente (CLI) */}
+        <div className="mb-1.5 flex items-center justify-between">
+          <label className={labelCls.replace('mb-1.5 ', '')}>Agente (CLI)</label>
+          <button
+            type="button"
+            onClick={checkCli}
+            disabled={checkingCli}
+            title="Comprobar si el CLI está instalado y disponible"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:border-line-strong hover:text-white/85 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className={checkingCli ? 'inline-block animate-spin' : 'inline-block'}>
+              <ReloadIcon />
+            </span>
+            {checkingCli ? 'Comprobando…' : 'Comprobar disponibilidad'}
+          </button>
+        </div>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="shrink-0">
+            <CliBadge cli={draft.cli} size={22} />
+          </span>
+          <select
+            value={draft.cli}
+            onChange={(e) => {
+              const cli = e.target.value as AgentCli
+              setDraft((d) => ({ ...d, cli }))
+              setCliCheck(null)
+            }}
+            className={fieldCls}
+          >
+            {CLIS.map((c) => (
+              <option key={c.id} value={c.id} className="bg-elevated">
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {cliCheck && (
+          <div
+            className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
+              cliCheck.available
+                ? 'border-st-finished/30 bg-st-finished/10 text-st-finished'
+                : 'border-st-error/30 bg-st-error/10 text-st-error'
+            }`}
+          >
+            {cliCheck.available
+              ? `Disponible${cliCheck.version ? ` · ${cliCheck.version}` : ''}`
+              : `No disponible${cliCheck.error ? ` · ${cliCheck.error}` : ''}`}
+          </div>
+        )}
+        {!cliCheck && <div className="mb-4" />}
 
         {/* Modelo */}
         <div className="mb-1.5 flex items-center justify-between">

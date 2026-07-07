@@ -21,5 +21,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test (vitest)
+        run: npm test
+
       - name: Build (type-check + vite build)
         run: npm run build

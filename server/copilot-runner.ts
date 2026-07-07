@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { getAgentTemplateBody, getSkillBody, getSkills } from './config-reader.ts'
-import type { AgentConfig, ServerMessage } from './types.ts'
+import { getAdapter, type LineHandlers } from './cli-adapters.ts'
+import { getPolicy, getSandboxCwd } from './cli-policy.ts'
+import type { AgentConfig, MemoryLink, ServerMessage } from './types.ts'
 
 const MAX_PARALLEL = 8
 /** Tiempo máximo por agente antes de abortar (ms). */
@@ -9,20 +11,48 @@ const AGENT_TIMEOUT_MS = 180_000
 type Send = (msg: ServerMessage) => void
 
 /**
- * Construye el prompt completo de un agente: persona (plantilla) + skills +
- * instrucción de brevedad + la pregunta del usuario. Copilot CLI no expone un
- * flag de "system prompt", así que inyectamos el contexto en el propio prompt.
+ * Última respuesta de cada agente, a nivel de módulo (persiste entre rondas
+ * porque se crea un OfficeRunner nuevo por request). Es la "memoria" que los
+ * agentes enlazados comparten: en la ronda siguiente, cada agente recibe las
+ * respuestas anteriores de sus compañeros de grupo.
  */
-function buildPrompt(agent: AgentConfig, userPrompt: string): string {
+const lastAnswers = new Map<string, string>()
+
+/** Contexto compartido por el grupo de memoria al que pertenece un agente. */
+interface SharedContext {
+  /** Unión de las skills de todos los miembros del grupo. */
+  skillIds: string[]
+  /** Respuestas anteriores de los compañeros de grupo. */
+  partners: { name: string; text: string }[]
+}
+
+/**
+ * Construye el prompt completo de un agente: persona (plantilla) + skills +
+ * (memoria compartida del grupo) + instrucción de brevedad + la pregunta. Los
+ * CLIs no exponen un flag de "system prompt", así que inyectamos el contexto en
+ * el propio prompt.
+ */
+function buildPrompt(agent: AgentConfig, userPrompt: string, shared?: SharedContext): string {
   const parts: string[] = []
 
   const persona = getAgentTemplateBody(agent.agentFile)
   if (persona) parts.push(persona)
 
   const skillNames = new Map(getSkills().map((s) => [s.id, s.name]))
-  for (const skillId of agent.skills) {
+  const skillIds = shared && shared.skillIds.length > 0 ? shared.skillIds : agent.skills
+  for (const skillId of skillIds) {
     const body = getSkillBody(skillId)
     if (body) parts.push(`## Skill: ${skillNames.get(skillId) ?? skillId}\n${body}`)
+  }
+
+  if (shared && shared.partners.length > 0) {
+    const mem = shared.partners.map((p) => `${p.name}: ${p.text}`).join('\n\n')
+    parts.push(
+      '## Memoria compartida del equipo\n' +
+        'Compañeros con los que compartes memoria respondieron en la ronda ' +
+        `anterior:\n\n${mem}\n\nTenlo en cuenta al elaborar tu respuesta.`,
+    )
+    // TODO: compartir también los MCPs de los agentes enlazados (pendiente).
   }
 
   parts.push(
@@ -34,6 +64,46 @@ function buildPrompt(agent: AgentConfig, userPrompt: string): string {
   parts.push(`Pregunta:\n${userPrompt}`)
 
   return parts.join('\n\n')
+}
+
+/**
+ * Calcula los grupos de memoria (componentes conexos del grafo de enlaces) y
+ * devuelve, para cada id de agente, la lista de miembros de su grupo (incluido
+ * él mismo). Ids fuera de `agentIds` se ignoran.
+ */
+export function computeGroupMembers(agentIds: string[], links: MemoryLink[]): Map<string, string[]> {
+  const parent = new Map(agentIds.map((id) => [id, id]))
+  const find = (x: string): string => {
+    let r = x
+    while (parent.get(r) !== r) r = parent.get(r)!
+    // Compresión de caminos.
+    let c = x
+    while (parent.get(c) !== r) {
+      const next = parent.get(c)!
+      parent.set(c, r)
+      c = next
+    }
+    return r
+  }
+  const idSet = new Set(agentIds)
+  for (const [a, b] of links) {
+    if (!idSet.has(a) || !idSet.has(b)) continue
+    const ra = find(a)
+    const rb = find(b)
+    if (ra !== rb) parent.set(ra, rb)
+  }
+  const byRoot = new Map<string, string[]>()
+  for (const id of agentIds) {
+    const root = find(id)
+    const list = byRoot.get(root) ?? []
+    list.push(id)
+    byRoot.set(root, list)
+  }
+  const memberMap = new Map<string, string[]>()
+  for (const members of byRoot.values()) {
+    for (const id of members) memberMap.set(id, members)
+  }
+  return memberMap
 }
 
 /** Estado interno de un proceso de agente en curso. */
@@ -49,9 +119,9 @@ interface AgentProcess {
 }
 
 /**
- * Orquesta una ronda de ejecución: lanza un proceso `copilot -p` por agente,
- * traduce los eventos JSONL a actualizaciones de estado y permite cancelar.
- * Solo una ronda activa a la vez.
+ * Orquesta una ronda de ejecución: lanza un proceso por agente (según su CLI:
+ * copilot, claude u opencode), traduce la salida a actualizaciones de estado y
+ * permite cancelar. Solo una ronda activa a la vez.
  */
 export class OfficeRunner {
   private running = new Map<string, AgentProcess>()
@@ -61,13 +131,32 @@ export class OfficeRunner {
   }
 
   /** Lanza la ronda. Resuelve cuando todos los agentes han terminado. */
-  async run(agents: AgentConfig[], prompt: string, send: Send): Promise<void> {
+  async run(agents: AgentConfig[], prompt: string, send: Send, links: MemoryLink[] = []): Promise<void> {
     if (this.isRunning) this.cancel()
 
     const batch = agents.slice(0, MAX_PARALLEL)
     send({ type: 'run-started', agentIds: batch.map((a) => a.id) })
 
-    await Promise.all(batch.map((agent) => this.runOne(agent, prompt, send)))
+    // Purga la memoria de agentes que ya no están en el equipo (evita fugas).
+    const teamIds = new Set(agents.map((a) => a.id))
+    for (const id of lastAnswers.keys()) {
+      if (!teamIds.has(id)) lastAnswers.delete(id)
+    }
+
+    const byId = new Map(batch.map((a) => [a.id, a]))
+    const memberMap = computeGroupMembers(batch.map((a) => a.id), links)
+
+    await Promise.all(
+      batch.map((agent) => {
+        const members = memberMap.get(agent.id) ?? [agent.id]
+        const skillIds = [...new Set(members.flatMap((id) => byId.get(id)?.skills ?? []))]
+        const partners = members
+          .filter((id) => id !== agent.id)
+          .map((id) => ({ name: byId.get(id)?.name ?? id, text: lastAnswers.get(id) ?? '' }))
+          .filter((p) => p.text.trim() !== '')
+        return this.runOne(agent, prompt, send, { skillIds, partners })
+      }),
+    )
 
     send({ type: 'run-finished' })
   }
@@ -86,32 +175,28 @@ export class OfficeRunner {
     this.running.clear()
   }
 
-  private runOne(agent: AgentConfig, prompt: string, send: Send): Promise<void> {
+  private runOne(agent: AgentConfig, prompt: string, send: Send, shared: SharedContext): Promise<void> {
     return new Promise<void>((resolve) => {
       send({ type: 'agent-update', agentId: agent.id, status: 'starting' })
 
-      const fullPrompt = buildPrompt(agent, prompt)
-      const args = [
-        '-p', fullPrompt,
-        '--model', agent.model,
-        '--output-format', 'json',
-        '--allow-all-tools',
-        '--no-custom-instructions',
-        '--no-color',
-        // Q&A puro: bloqueamos edición de archivos y shell (la app no edita).
-        '--deny-tool', 'write',
-        '--deny-tool', 'shell',
-      ]
+      const adapter = getAdapter(agent.cli)
+      const policy = getPolicy(agent.cli)
+      const fullPrompt = buildPrompt(agent, prompt, shared)
+      // Args funcionales + flags de seguridad (solo-lectura) de la política.
+      const args = [...adapter.runArgs(fullPrompt, agent.model), ...policy.readOnlyArgs]
 
       let child: ChildProcessWithoutNullStreams
       try {
-        child = spawn('copilot', args, { cwd: process.cwd() })
+        child = spawn(adapter.bin, args, {
+          cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
+          env: { ...process.env, ...policy.env },
+        })
       } catch (err) {
         send({
           type: 'agent-update',
           agentId: agent.id,
           status: 'error',
-          error: `No se pudo iniciar Copilot CLI: ${(err as Error).message}`,
+          error: `No se pudo iniciar ${adapter.bin}: ${(err as Error).message}`,
         })
         resolve()
         return
@@ -146,17 +231,45 @@ export class OfficeRunner {
         resolve()
       }
 
+      const handlers: LineHandlers = {
+        setThinking: () => send({ type: 'agent-update', agentId: agent.id, status: 'thinking' }),
+        setResponding: (text) =>
+          send({ type: 'agent-update', agentId: agent.id, status: 'responding', text }),
+        addUsageAic: (aic) =>
+          send({
+            type: 'agent-usage',
+            agentId: agent.id,
+            aic,
+            outputTokens: proc.outputTokens,
+            inputTokens: proc.inputTokens,
+          }),
+        fatal: (error) => {
+          if (proc.settled) return
+          proc.settled = true
+          clearTimeout(proc.timer)
+          send({ type: 'agent-update', agentId: agent.id, status: 'error', error })
+          proc.child.kill('SIGTERM')
+        },
+      }
+
+      // CLIs no-streaming (claude/opencode): no hay eventos por línea, así que
+      // marcamos "thinking" al arrancar; el texto llega de una vez al cerrar.
+      if (!adapter.onLine) handlers.setThinking()
+
       let stdoutBuf = ''
+      let fullStdout = ''
       let stderrBuf = ''
 
       child.stdout.setEncoding('utf8')
       child.stdout.on('data', (chunk: string) => {
+        fullStdout += chunk
+        if (!adapter.onLine) return
         stdoutBuf += chunk
         let nl: number
         while ((nl = stdoutBuf.indexOf('\n')) !== -1) {
           const line = stdoutBuf.slice(0, nl).trim()
           stdoutBuf = stdoutBuf.slice(nl + 1)
-          if (line) this.handleLine(line, agent.id, proc, send)
+          if (line) adapter.onLine(line, proc, handlers)
         }
       })
 
@@ -172,7 +285,7 @@ export class OfficeRunner {
           type: 'agent-update',
           agentId: agent.id,
           status: 'error',
-          error: `Error al ejecutar Copilot CLI: ${err.message}`,
+          error: `Error al ejecutar ${adapter.bin}: ${err.message}`,
         })
         finish()
       })
@@ -184,98 +297,28 @@ export class OfficeRunner {
         }
         proc.settled = true
         if (code === 0) {
-          send({
-            type: 'agent-update',
-            agentId: agent.id,
-            status: 'finished',
-            text: proc.finalText.trim(),
-          })
+          const text = adapter.finalText(fullStdout, proc).trim()
+          lastAnswers.set(agent.id, text)
+          send({ type: 'agent-update', agentId: agent.id, status: 'finished', text })
+          if (adapter.finalUsage) {
+            const u = adapter.finalUsage(fullStdout, proc)
+            if (u) {
+              send({
+                type: 'agent-usage',
+                agentId: agent.id,
+                aic: u.aic,
+                outputTokens: u.outputTokens,
+                inputTokens: u.inputTokens,
+              })
+            }
+          }
         } else {
-          const detail = this.extractError(stderrBuf) || `Copilot CLI salió con código ${code}.`
+          const detail = this.extractError(stderrBuf) || `${adapter.bin} salió con código ${code}.`
           send({ type: 'agent-update', agentId: agent.id, status: 'error', error: detail })
         }
         finish()
       })
     })
-  }
-
-  /** Procesa una línea JSONL de Copilot y emite el estado correspondiente. */
-  private handleLine(line: string, agentId: string, proc: AgentProcess, send: Send): void {
-    // Líneas de error no-JSON (p.ej. "Error: Model ... is not available.")
-    if (!line.startsWith('{')) {
-      if (/^Error:/i.test(line)) {
-        proc.settled = true
-        clearTimeout(proc.timer)
-        send({
-          type: 'agent-update',
-          agentId,
-          status: 'error',
-          error: line.replace(/^Error:\s*/i, ''),
-        })
-        proc.child.kill('SIGTERM')
-      }
-      return
-    }
-
-    let evt: any
-    try {
-      evt = JSON.parse(line)
-    } catch {
-      return
-    }
-
-    // El contenido de razonamiento llega por eventos assistant.reasoning*, y la
-    // respuesta por assistant.message*. NO filtramos por `phase` (no es fiable:
-    // gpt-5.x lo incluye como "final_answer" pero claude no lo emite). Solo
-    // tratamos `phase: "reasoning"` como excepción a ignorar.
-    switch (evt.type) {
-      case 'assistant.turn_start':
-        send({ type: 'agent-update', agentId, status: 'thinking' })
-        break
-
-      case 'assistant.message_start':
-        if (evt.data?.messageId) {
-          if (evt.data?.phase === 'reasoning') {
-            proc.reasoningMessageIds.add(evt.data.messageId)
-          } else {
-            send({ type: 'agent-update', agentId, status: 'responding', text: proc.finalText })
-          }
-        }
-        break
-
-      case 'assistant.message_delta':
-        if (evt.data?.messageId && !proc.reasoningMessageIds.has(evt.data.messageId)) {
-          proc.finalText += evt.data.deltaContent ?? ''
-          send({ type: 'agent-update', agentId, status: 'responding', text: proc.finalText })
-        }
-        break
-
-      case 'assistant.message':
-        if (
-          typeof evt.data?.content === 'string' &&
-          evt.data?.phase !== 'reasoning' &&
-          !(evt.data?.messageId && proc.reasoningMessageIds.has(evt.data.messageId))
-        ) {
-          proc.finalText = evt.data.content
-          send({ type: 'agent-update', agentId, status: 'responding', text: proc.finalText })
-        }
-        if (typeof evt.data?.outputTokens === 'number') {
-          proc.outputTokens += evt.data.outputTokens
-        }
-        if (typeof evt.data?.inputTokens === 'number') {
-          proc.inputTokens += evt.data.inputTokens
-        }
-        break
-
-      case 'result': {
-        const aic = typeof evt.usage?.premiumRequests === 'number' ? evt.usage.premiumRequests : 0
-        send({ type: 'agent-usage', agentId, aic, outputTokens: proc.outputTokens, inputTokens: proc.inputTokens })
-        break
-      }
-
-      default:
-        break
-    }
   }
 
   /** Intenta extraer un mensaje de error legible de stderr. */

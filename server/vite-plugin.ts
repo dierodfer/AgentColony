@@ -8,6 +8,8 @@ import {
   getSkillBody,
   readTeam,
   writeTeam,
+  readMemoryLinks,
+  writeMemoryLinks,
   createSkill,
   createTemplate,
   updateTemplate,
@@ -18,7 +20,9 @@ import {
 import { getModels, isValidModel, refreshModels } from './models.ts'
 import { OfficeRunner } from './copilot-runner.ts'
 import { generateAgentTemplate, generateSkill } from './template-generator.ts'
-import type { AgentConfig, ServerMessage } from './types.ts'
+import { checkAvailability, checkAllAvailability, CLI_IDS } from './cli-adapters.ts'
+import { synthesizeAnswers, type AnswerInput } from './synthesizer.ts'
+import type { AgentCli, AgentConfig, MemoryLink, ServerMessage } from './types.ts'
 
 const MAX_AGENTS = 8
 
@@ -61,11 +65,14 @@ function validateAgent(body: unknown): { agent: Omit<AgentConfig, 'id'> } | { er
     return { error: `La plantilla de agente "${agentFile}" no existe.` }
   }
 
+  const cli: AgentCli = CLI_IDS.includes(b?.cli as AgentCli) ? (b.cli as AgentCli) : 'copilot'
+
   const model = typeof b?.model === 'string' ? b.model : ''
   if (!model) return { error: 'El modelo es obligatorio.' }
   // Solo validamos contra el catálogo si ya se han recargado modelos; si aún no
   // (caché vacía), aceptamos cualquier id para no bloquear edición de agentes.
-  if (getModels().length > 0 && !isValidModel(model)) {
+  // El catálogo de modelos es de Copilot; para otros CLIs no lo aplicamos.
+  if (cli === 'copilot' && getModels().length > 0 && !isValidModel(model)) {
     return { error: `El modelo "${model}" no es válido.` }
   }
 
@@ -74,7 +81,7 @@ function validateAgent(body: unknown): { agent: Omit<AgentConfig, 'id'> } | { er
     ? (b.skills as unknown[]).filter((s): s is string => typeof s === 'string' && validSkills.has(s))
     : []
 
-  return { agent: { name, avatar, agentFile, model, skills } }
+  return { agent: { name, avatar, agentFile, model, skills, cli } }
 }
 
 /**
@@ -104,6 +111,18 @@ export function officeApiPlugin(): Plugin {
             } catch (e) {
               return sendJson(res, 502, { error: (e as Error).message })
             }
+          }
+
+          // ---- Disponibilidad de CLIs (copilot/claude/opencode) ----
+          if (method === 'GET' && path === '/api/cli/status') {
+            return sendJson(res, 200, await checkAllAvailability())
+          }
+          if (method === 'POST' && path === '/api/cli/check') {
+            const b = (await readJson(req)) as { cli?: string }
+            if (!CLI_IDS.includes(b.cli as AgentCli)) {
+              return sendJson(res, 400, { error: 'CLI no reconocido.' })
+            }
+            return sendJson(res, 200, await checkAvailability(b.cli as AgentCli))
           }
           if (method === 'GET' && path === '/api/templates') return sendJson(res, 200, getAgentTemplates())
 
@@ -236,6 +255,39 @@ export function officeApiPlugin(): Plugin {
             return sendJson(res, 200, team[idx])
           }
 
+          // ---- Enlaces de memoria entre agentes ----
+          if (method === 'GET' && path === '/api/memory') return sendJson(res, 200, readMemoryLinks())
+          if (method === 'PUT' && path === '/api/memory') {
+            const b = (await readJson(req)) as { links?: unknown }
+            const links = Array.isArray(b.links)
+              ? (b.links as unknown[]).filter(
+                  (l): l is MemoryLink =>
+                    Array.isArray(l) && l.length === 2 && typeof l[0] === 'string' && typeof l[1] === 'string',
+                )
+              : []
+            writeMemoryLinks(links)
+            return sendJson(res, 200, readMemoryLinks())
+          }
+
+          // ---- Síntesis del equipo: combina respuestas en una conclusión ----
+          if (method === 'POST' && path === '/api/synthesize') {
+            const b = (await readJson(req)) as { prompt?: string; answers?: unknown }
+            const prompt = b.prompt?.trim()
+            if (!prompt) return sendJson(res, 400, { error: 'Falta el prompt.' })
+            const answers: AnswerInput[] = Array.isArray(b.answers)
+              ? (b.answers as unknown[])
+                  .map((a) => a as { name?: unknown; text?: unknown })
+                  .filter((a) => typeof a.name === 'string' && typeof a.text === 'string')
+                  .map((a) => ({ name: a.name as string, text: a.text as string }))
+              : []
+            if (answers.length < 2) return sendJson(res, 400, { error: 'Se necesitan al menos 2 respuestas.' })
+            try {
+              return sendJson(res, 200, { text: await synthesizeAnswers(prompt, answers) })
+            } catch (e) {
+              return sendJson(res, 502, { error: (e as Error).message })
+            }
+          }
+
           // ---- Ronda de ejecución (streaming NDJSON) ----
           if (method === 'POST' && path === '/api/run') {
             const body = (await readJson(req)) as { prompt?: string }
@@ -243,6 +295,7 @@ export function officeApiPlugin(): Plugin {
             if (!prompt) return sendJson(res, 400, { error: 'Falta el prompt.' })
 
             const team = readTeam()
+            const memoryLinks = readMemoryLinks()
             res.writeHead(200, {
               'Content-Type': 'application/x-ndjson',
               'Cache-Control': 'no-cache',
@@ -263,7 +316,7 @@ export function officeApiPlugin(): Plugin {
               if (runner.isRunning) runner.cancel()
             })
 
-            await runner.run(team, prompt, send)
+            await runner.run(team, prompt, send, memoryLinks)
             if (!res.writableEnded) res.end()
             return
           }

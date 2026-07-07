@@ -4,15 +4,9 @@ import { Bot } from 'lucide-react'
 
 export type SectionId = 'agentes' | 'templates' | 'mapa'
 
+/** Logo oficial de AgentColony (public/logo.png): la colonia de robots. */
 function BrandMark() {
-  return (
-    <svg viewBox="0 0 28 28" width="22" height="22" fill="none" aria-hidden>
-      <path d="M14 6.5L7 19.5h14L14 6.5z" stroke="var(--color-accent)" strokeWidth="1.4" strokeLinejoin="round" opacity="0.5" />
-      <circle cx="14" cy="6.5" r="2.4" fill="var(--color-accent)" />
-      <circle cx="7" cy="19.5" r="2.4" fill="#2DD4A7" />
-      <circle cx="21" cy="19.5" r="2.4" fill="#A78BFA" />
-    </svg>
-  )
+  return <img src="/logo.png" alt="AgentColony" width={26} height={26} className="shrink-0 object-contain" />
 }
 
 function PanelIcon() {

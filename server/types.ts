@@ -42,6 +42,9 @@ export interface AgentTemplate {
   name: string
 }
 
+/** CLI de agente que ejecuta las respuestas (cada uno tiene su binario/args). */
+export type AgentCli = 'copilot' | 'claude' | 'opencode'
+
 /** Instancia de agente del equipo (un puesto en la oficina). */
 export interface AgentConfig {
   id: string
@@ -54,7 +57,16 @@ export interface AgentConfig {
   model: string
   /** Ids de skills seleccionadas (nombres de archivo sin extensión). */
   skills: string[]
+  /** CLI que ejecuta al agente (por defecto "copilot"). */
+  cli: AgentCli
 }
+
+/**
+ * Enlace de memoria entre dos agentes (par de ids). Los agentes conectados
+ * comparten skills y respuestas anteriores en cada ronda. Los grupos de memoria
+ * son los componentes conexos del grafo de enlaces.
+ */
+export type MemoryLink = [string, string]
 
 // ---- Protocolo de streaming (NDJSON) ----
 // El cliente lanza una ronda con POST /api/run { prompt } y el servidor
@@ -64,6 +76,6 @@ export interface AgentConfig {
 /** Eventos que el servidor emite por línea durante una ronda. */
 export type ServerMessage =
   | { type: 'agent-update'; agentId: string; status: AgentStatus; text?: string; error?: string }
-  | { type: 'agent-usage'; agentId: string; aic: number; outputTokens: number; inputTokens: number }
+  | { type: 'agent-usage'; agentId: string; aic: number; inputTokens: number; outputTokens: number }
   | { type: 'run-started'; agentIds: string[] }
   | { type: 'run-finished' }

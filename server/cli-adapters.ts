@@ -328,9 +328,17 @@ export async function pickAvailableCli(): Promise<AgentCli> {
  * Ejecuta una consulta puntual (no-streaming) contra un CLI y resuelve con el
  * texto final. Reutiliza el mismo parseo de cada adaptador que el runner.
  * Pensado para tareas one-off (p.ej. síntesis del equipo). Rechaza si el
- * proceso no arranca, sale con error o agota el timeout.
+ * proceso no arranca, sale con error o agota el timeout. `extraArgs` se añade
+ * al final (p.ej. para acotar herramientas en una consulta puntual sin tocar
+ * los flags funcionales del adaptador).
  */
-export function runOnce(cli: AgentCli, prompt: string, model = 'auto', timeoutMs = 60_000): Promise<string> {
+export function runOnce(
+  cli: AgentCli,
+  prompt: string,
+  model = 'auto',
+  timeoutMs = 60_000,
+  extraArgs: string[] = [],
+): Promise<string> {
   const adapter = getAdapter(cli)
   return new Promise((resolve, reject) => {
     const state: AgentProcState = { finalText: '', reasoningMessageIds: new Set(), outputTokens: 0, inputTokens: 0 }
@@ -354,7 +362,7 @@ export function runOnce(cli: AgentCli, prompt: string, model = 'auto', timeoutMs
     const policy = getPolicy(cli)
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(adapter.bin, [...adapter.runArgs(prompt, model), ...policy.readOnlyArgs], {
+      child = spawn(adapter.bin, [...adapter.runArgs(prompt, model), ...policy.readOnlyArgs, ...extraArgs], {
         cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
         env: { ...process.env, ...policy.env },
       })
@@ -392,6 +400,61 @@ export function runOnce(cli: AgentCli, prompt: string, model = 'auto', timeoutMs
       if (fatalErr) return finish(new Error(fatalErr))
       if (code === 0) finish(null, adapter.finalText(full, state).trim())
       else finish(new Error(stderrOut.trim().split('\n').slice(-1)[0] || `${adapter.bin} salió con código ${code}`))
+    })
+
+    const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), timeoutMs)
+  })
+}
+
+/** Convierte la salida de `opencode models` en una lista de ids (una por línea). Exportada para test. */
+export function parseOpencodeModelLines(raw: string): string[] {
+  return stripAnsi(raw)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Lista los modelos de opencode con su comando nativo (`opencode models`), sin
+ * pasar por un turno de LLM: a diferencia del resto de CLIs, opencode expone
+ * el catálogo directamente, así que es más rápido y determinístico que pedirle
+ * al agente que lo describa (que además puede ponerse a explorar el cwd).
+ */
+export function listOpencodeModels(timeoutMs = 15_000): Promise<string[]> {
+  const policy = getPolicy('opencode')
+  return new Promise((resolve, reject) => {
+    let out = ''
+    let err = ''
+    let settled = false
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn('opencode', ['models'], {
+        cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
+        env: { ...process.env, ...policy.env },
+      })
+    } catch (e) {
+      reject(new Error(`No se pudo ejecutar opencode: ${(e as Error).message}`))
+      return
+    }
+
+    const finish = (err2: Error | null, value?: string[]) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (!child.killed) child.kill('SIGTERM')
+      if (err2) reject(err2)
+      else resolve(value ?? [])
+    }
+
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (c: string) => (out += c))
+    child.stderr?.setEncoding('utf8')
+    child.stderr?.on('data', (c: string) => (err += c))
+
+    child.on('error', (e) => finish(new Error(`No se pudo ejecutar opencode: ${e.message}`)))
+    child.on('close', (code) => {
+      if (code === 0) finish(null, parseOpencodeModelLines(out))
+      else finish(new Error(stripAnsi(err || out).trim().split('\n').slice(-1)[0] || `opencode salió con código ${code}`))
     })
 
     const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), timeoutMs)

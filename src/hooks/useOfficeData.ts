@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type CliAvailability } from '../api'
+import { CLIS } from '../lib/clis'
 import type { AgentCli, AgentConfig, AgentTemplate, MemoryLink, ModelOption, SkillInfo } from '../types'
+
+/** Catálogo de modelos por CLI (vacío hasta recargar los de ese CLI). */
+export type ModelsByCli = Partial<Record<AgentCli, ModelOption[]>>
 
 /**
  * Carga los catálogos (modelos, skills, plantillas) y el equipo de agentes,
  * y expone operaciones CRUD que persisten en el backend y refrescan el estado.
  */
 export function useOfficeData() {
-  const [models, setModels] = useState<ModelOption[]>([])
+  const [modelsByCli, setModelsByCli] = useState<ModelsByCli>({})
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [templates, setTemplates] = useState<AgentTemplate[]>([])
   const [agents, setAgents] = useState<AgentConfig[]>([])
@@ -31,19 +35,19 @@ export function useOfficeData() {
     let cancelled = false
     ;(async () => {
       try {
-        const [m, s, t, a, links] = await Promise.all([
-          api.getModels(),
+        const [s, t, a, links, modelLists] = await Promise.all([
           api.getSkills(),
           api.getTemplates(),
           api.getAgents(),
           api.getMemory(),
+          Promise.all(CLIS.map((c) => api.getModels(c.id))),
         ])
         if (cancelled) return
-        setModels(m)
         setSkills(s)
         setTemplates(t)
         setAgents(a)
         setMemoryLinks(links)
+        setModelsByCli(Object.fromEntries(CLIS.map((c, i) => [c.id, modelLists[i]])))
       } catch (err) {
         if (!cancelled) setError((err as Error).message)
       } finally {
@@ -104,10 +108,10 @@ export function useOfficeData() {
     }
   }, [])
 
-  // Recarga la lista de modelos desde Copilot (bajo demanda, no automático).
-  const refreshModels = useCallback(async () => {
-    const list = await api.refreshModels()
-    setModels(list)
+  // Recarga la lista de modelos del CLI indicado (bajo demanda, no automático).
+  const refreshModels = useCallback(async (cli: AgentCli) => {
+    const list = await api.refreshModels(cli)
+    setModelsByCli((prev) => ({ ...prev, [cli]: list }))
     return list
   }, [])
 
@@ -130,7 +134,7 @@ export function useOfficeData() {
   )
 
   return {
-    models,
+    modelsByCli,
     skills,
     templates,
     agents,

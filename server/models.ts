@@ -1,12 +1,13 @@
 import { runOnce } from './cli-adapters.ts'
-import type { ModelOption } from './types.ts'
+import type { AgentCli, ModelOption } from './types.ts'
 
-// Los modelos se obtienen preguntándole a Copilot CLI en modo no interactivo
-// (vía runOnce, misma capa de adaptadores que el runner) por los ids que acepta
-// su propio flag --model, forzando salida JSON pura. NO se consulta
-// automáticamente: solo bajo demanda desde el botón "Recargar modelos" del
-// formulario de agente (endpoint POST /api/models/refresh). La lista resuelta se
-// cachea en memoria durante la sesión del servidor. Es específico de copilot.
+// Cada CLI tiene su propio catálogo de modelos. Se obtienen preguntándole al
+// propio CLI en modo no interactivo (vía runOnce, misma capa de adaptadores que
+// el runner) por los ids que acepta su flag --model, forzando salida JSON pura.
+// NO se consulta automáticamente: solo bajo demanda desde el botón "Recargar
+// modelos" del formulario de agente (endpoint POST /api/models/refresh con el
+// CLI seleccionado). Cada catálogo resuelto se cachea en memoria durante la
+// sesión del servidor; hasta la primera recarga, la lista de ese CLI está vacía.
 
 const REFRESH_TIMEOUT_MS = 30_000
 
@@ -46,34 +47,34 @@ export function parseModelsFromOutput(raw: string): ModelOption[] {
   const models = ids
     .filter((id): id is string => typeof id === 'string' && id.trim() !== '')
     .map((id) => ({ id, label: labelFor(id) }))
-  // Si Copilot ofrece "auto", lo mostramos primero (opción recomendada).
+  // Si el CLI ofrece "auto", lo mostramos primero (opción recomendada).
   models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
   return models
 }
 
-// Cache en memoria: se rellena al pulsar "Recargar modelos". Vacío al arrancar.
-let cachedModels: ModelOption[] = []
-let modelIdSet = new Set<string>()
+// Caché en memoria por CLI: se rellena al pulsar "Recargar modelos". Vacía al arrancar.
+const cachedModels = new Map<AgentCli, ModelOption[]>()
+const modelIdSets = new Map<AgentCli, Set<string>>()
 
-/** Modelos resueltos en la última recarga (vacío hasta la primera). */
-export function getModels(): ModelOption[] {
-  return cachedModels
+/** Modelos resueltos en la última recarga de un CLI (vacío hasta la primera). */
+export function getModels(cli: AgentCli): ModelOption[] {
+  return cachedModels.get(cli) ?? []
 }
 
-/** ¿Es un id de modelo válido y seleccionable (según la última recarga)? */
-export function isValidModel(id: string): boolean {
-  return modelIdSet.has(id)
+/** ¿Es un id de modelo válido para ese CLI (según su última recarga)? */
+export function isValidModel(cli: AgentCli, id: string): boolean {
+  return modelIdSets.get(cli)?.has(id) ?? false
 }
 
 /**
- * Recarga los modelos desde Copilot (vía runOnce, con la política de seguridad y
- * el cwd aislado de la capa de adaptadores), actualiza la caché y devuelve la
- * lista. Puede devolver [] si la respuesta no se pudo parsear.
+ * Recarga los modelos del CLI indicado (vía runOnce, con la política de
+ * seguridad y el cwd aislado de la capa de adaptadores), actualiza su caché y
+ * devuelve la lista. Puede devolver [] si la respuesta no se pudo parsear.
  */
-export async function refreshModels(): Promise<ModelOption[]> {
-  const output = await runOnce('copilot', LIST_MODELS_PROMPT, 'auto', REFRESH_TIMEOUT_MS)
+export async function refreshModels(cli: AgentCli): Promise<ModelOption[]> {
+  const output = await runOnce(cli, LIST_MODELS_PROMPT, 'auto', REFRESH_TIMEOUT_MS)
   const models = parseModelsFromOutput(output)
-  cachedModels = models
-  modelIdSet = new Set(models.map((m) => m.id))
+  cachedModels.set(cli, models)
+  modelIdSets.set(cli, new Set(models.map((m) => m.id)))
   return models
 }

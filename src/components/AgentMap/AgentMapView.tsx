@@ -248,6 +248,29 @@ export function AgentMapView({
           </svg>
         )}
 
+        {/* Botón de eliminar en el punto medio de cada conexión. */}
+        {size.width > 0 &&
+          memoryLinks.map(([a, b]) => {
+            const pa = positions[a]
+            const pb = positions[b]
+            if (!pa || !pb) return null
+            return (
+              <button
+                key={`unlink-${linkKey(a, b)}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const key = linkKey(a, b)
+                  onSaveMemoryLinks(memoryLinks.filter(([x, y]) => linkKey(x, y) !== key))
+                }}
+                title="Eliminar esta conexión de memoria"
+                className="absolute z-20 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-st-error/50 bg-elevated/90 text-sm leading-none text-st-error opacity-40 shadow-md shadow-black/40 backdrop-blur transition-all hover:scale-110 hover:opacity-100"
+                style={{ left: (pa.x + pb.x) / 2, top: (pa.y + pb.y) / 2 }}
+              >
+                ×
+              </button>
+            )
+          })}
+
         {/* Aviso de modo enlace. */}
         {linkingFrom && (
           <div className="pointer-events-none absolute inset-x-0 bottom-6 z-40 flex justify-center px-4">

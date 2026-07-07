@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
-import { CliBadge } from './CliBadge'
+import { CliLogo } from './CliLogo'
 import { CLIS } from '../lib/clis'
 import { api, type CliAvailability } from '../api'
+import type { ModelsByCli } from '../hooks/useOfficeData'
 import type {
   AgentCli,
   AgentDraft,
@@ -15,10 +16,12 @@ import type {
 
 interface Props {
   initial: AgentDraft
-  isNew: boolean
-  models: ModelOption[]
-  /** Recarga los modelos desde Copilot (`/model`) y devuelve la nueva lista. */
-  onReloadModels: () => Promise<ModelOption[]>
+  /** Catálogo de modelos por CLI (vacío hasta recargar los de ese CLI). */
+  modelsByCli: ModelsByCli
+  /** Recarga los modelos del CLI indicado y devuelve la nueva lista. */
+  onReloadModels: (cli: AgentCli) => Promise<ModelOption[]>
+  /** Disponibilidad de CLIs conocida al abrir (null si aún no comprobada). */
+  cliStatus: Record<AgentCli, CliAvailability> | null
   skills: SkillInfo[]
   templates: AgentTemplate[]
   /** Nombres (lowercase) de OTROS agentes — no se pueden repetir. */
@@ -120,9 +123,9 @@ function AvatarPicker({
 /** Modal de creación/edición de un agente, con creación inline de skills/plantillas. */
 export function AgentEditor({
   initial,
-  isNew,
-  models,
+  modelsByCli,
   onReloadModels,
+  cliStatus,
   skills,
   templates,
   takenNames,
@@ -134,6 +137,8 @@ export function AgentEditor({
 }: Props) {
   const [draft, setDraft] = useState<AgentDraft>(initial)
   const nameTaken = takenNames.includes(draft.name.trim().toLowerCase())
+  /** Modelos del CLI actualmente seleccionado. */
+  const models = modelsByCli[draft.cli] ?? []
 
   const randomize = () => {
     const freeAvatars = ACCENTS.map((a) => a.id).filter((id) => !takenAvatars.includes(id))
@@ -150,33 +155,41 @@ export function AgentEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingModels, setLoadingModels] = useState(false)
-  const [checkingCli, setCheckingCli] = useState(false)
-  const [cliCheck, setCliCheck] = useState<CliAvailability | null>(null)
+  const [checkingClis, setCheckingClis] = useState(false)
+  const [availability, setAvailability] = useState<Record<AgentCli, CliAvailability> | null>(cliStatus)
 
-  const checkCli = async () => {
-    setCheckingCli(true)
+  /** Comprueba TODOS los CLIs a la vez y actualiza los chips. */
+  const checkAllClis = async () => {
+    setCheckingClis(true)
     setError(null)
     try {
-      setCliCheck(await api.cliCheck(draft.cli))
+      setAvailability(await api.cliStatus())
     } catch (e) {
       setError((e as Error).message)
     } finally {
-      setCheckingCli(false)
+      setCheckingClis(false)
     }
+  }
+
+  /** Ajusta el modelo del borrador al catálogo dado (si hay catálogo). */
+  const normalizeModel = (d: AgentDraft, list: ModelOption[]): AgentDraft =>
+    list.length === 0 || list.some((m) => m.id === d.model)
+      ? d
+      : { ...d, model: list.find((m) => /gpt.*mini/i.test(m.id))?.id ?? list[0]?.id ?? d.model }
+
+  const selectCli = (cli: AgentCli) => {
+    if (availability && availability[cli] && !availability[cli].available) return
+    setDraft((d) => normalizeModel({ ...d, cli }, modelsByCli[cli] ?? []))
   }
 
   const reloadModels = async () => {
     setLoadingModels(true)
     setError(null)
     try {
-      const list = await onReloadModels()
+      const list = await onReloadModels(draft.cli)
       // Si el modelo actual quedó fuera de la nueva lista, elige un GPT mini si
       // lo hay; si no, el primero disponible.
-      setDraft((d) =>
-        list.some((m) => m.id === d.model)
-          ? d
-          : { ...d, model: list.find((m) => /gpt.*mini/i.test(m.id))?.id ?? list[0]?.id ?? d.model },
-      )
+      setDraft((d) => normalizeModel(d, list))
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -229,11 +242,17 @@ export function AgentEditor({
         initial={{ opacity: 0, scale: 0.97, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
-        className="scroll-thin max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-elevated p-6 shadow-2xl shadow-black/40"
+        className="scroll-thin relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-elevated p-6 shadow-2xl shadow-black/40"
       >
-        <h3 className="mb-5 text-base font-semibold text-white/90">
-          {isNew ? 'Nuevo especialista' : 'Editar especialista'}
-        </h3>
+        {/* Cierre en la esquina superior derecha (sin título ni botón Cancelar). */}
+        <button
+          onClick={onCancel}
+          title="Cerrar"
+          aria-label="Cerrar"
+          className="absolute right-4 top-4 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-lg leading-none text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
+        >
+          ×
+        </button>
 
         {error && (
           <div className="mb-4 rounded-lg border border-st-error/30 bg-st-error/10 px-3 py-2 text-xs text-st-error">
@@ -241,8 +260,8 @@ export function AgentEditor({
           </div>
         )}
 
-        {/* Avatar: icono + nombre en la misma fila */}
-        <div className={`flex items-center gap-3 ${nameTaken ? 'mb-1.5' : 'mb-4'}`}>
+        {/* Avatar: icono + nombre en la misma fila (pr-9 deja sitio a la X). */}
+        <div className={`flex items-center gap-3 pr-9 ${nameTaken ? 'mb-1.5' : 'mb-4'}`}>
           <AvatarPicker
             value={draft.avatar}
             takenAvatars={takenAvatars}
@@ -265,56 +284,60 @@ export function AgentEditor({
           <p className="mb-4 text-xs text-st-error">Ya existe un especialista con ese nombre.</p>
         )}
 
-        {/* Agente (CLI) */}
-        <div className="mb-1.5 flex items-center justify-between">
+        {/* Agente (CLI): chips con el logo oficial de cada uno */}
+        <div className="mb-2 flex items-center justify-between">
           <label className={labelCls.replace('mb-1.5 ', '')}>Agente (CLI)</label>
           <button
             type="button"
-            onClick={checkCli}
-            disabled={checkingCli}
-            title="Comprobar si el CLI está instalado y disponible"
+            onClick={checkAllClis}
+            disabled={checkingClis}
+            title="Comprobar la disponibilidad de todos los CLIs"
             className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:border-line-strong hover:text-white/85 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className={checkingCli ? 'inline-block animate-spin' : 'inline-block'}>
+            <span className={checkingClis ? 'inline-block animate-spin' : 'inline-block'}>
               <ReloadIcon />
             </span>
-            {checkingCli ? 'Comprobando…' : 'Comprobar disponibilidad'}
+            {checkingClis ? 'Comprobando…' : 'Comprobar'}
           </button>
         </div>
-        <div className="mb-2 flex items-center gap-2">
-          <span className="shrink-0">
-            <CliBadge cli={draft.cli} size={22} />
-          </span>
-          <select
-            value={draft.cli}
-            onChange={(e) => {
-              const cli = e.target.value as AgentCli
-              setDraft((d) => ({ ...d, cli }))
-              setCliCheck(null)
-            }}
-            className={fieldCls}
-          >
-            {CLIS.map((c) => (
-              <option key={c.id} value={c.id} className="bg-elevated">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {CLIS.map((c) => {
+            const check = availability?.[c.id]
+            const unavailable = check !== undefined && !check.available
+            const on = draft.cli === c.id
+            const title = check === undefined
+              ? c.label
+              : check.available
+                ? `${c.label} · disponible${check.version ? ` (${check.version})` : ''}`
+                : `${c.label} · no instalado${check.error ? ` — ${check.error}` : ''}`
+            return (
+              <button
+                key={c.id}
+                onClick={() => selectCli(c.id)}
+                disabled={unavailable}
+                title={title}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  unavailable
+                    ? 'cursor-not-allowed border-line text-white/30 line-through opacity-50'
+                    : on
+                      ? 'text-white'
+                      : 'border-line bg-surface text-white/60 hover:border-line-strong hover:text-white/85'
+                }`}
+                style={on && !unavailable
+                  ? {
+                      borderColor: c.color,
+                      backgroundColor: `color-mix(in srgb, ${c.color} 16%, transparent)`,
+                    }
+                  : undefined}
+              >
+                <span style={{ color: unavailable ? undefined : c.color }}>
+                  <CliLogo cli={c.id} size={15} />
+                </span>
                 {c.label}
-              </option>
-            ))}
-          </select>
+              </button>
+            )
+          })}
         </div>
-        {cliCheck && (
-          <div
-            className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
-              cliCheck.available
-                ? 'border-st-finished/30 bg-st-finished/10 text-st-finished'
-                : 'border-st-error/30 bg-st-error/10 text-st-error'
-            }`}
-          >
-            {cliCheck.available
-              ? `Disponible${cliCheck.version ? ` · ${cliCheck.version}` : ''}`
-              : `No disponible${cliCheck.error ? ` · ${cliCheck.error}` : ''}`}
-          </div>
-        )}
-        {!cliCheck && <div className="mb-4" />}
 
         {/* Modelo */}
         <div className="mb-1.5 flex items-center justify-between">
@@ -323,7 +346,7 @@ export function AgentEditor({
             type="button"
             onClick={reloadModels}
             disabled={loadingModels}
-            title="Recargar modelos desde Copilot (/model)"
+            title={`Recargar la lista de modelos de ${draft.cli}`}
             className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:border-line-strong hover:text-white/85 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className={loadingModels ? 'inline-block animate-spin' : 'inline-block'}>
@@ -351,7 +374,7 @@ export function AgentEditor({
         </select>
         {models.length === 0 && (
           <p className="mb-4 text-[11px] text-white/35">
-            Los modelos se obtienen de Copilot al pulsar «Recargar modelos».
+            Los modelos de {draft.cli} se obtienen al pulsar «Recargar modelos».
           </p>
         )}
         {models.length > 0 && <div className="mb-4" />}
@@ -473,13 +496,7 @@ export function AgentEditor({
           </InlineCreate>
         )}
 
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white/55 transition-colors hover:bg-white/[0.06] hover:text-white/85"
-          >
-            Cancelar
-          </button>
+        <div className="mt-6 flex justify-end">
           <button
             onClick={() => onSave({ ...draft, name: draft.name.trim() })}
             disabled={!draft.name.trim() || !draft.agentFile || nameTaken}

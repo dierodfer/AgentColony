@@ -58,7 +58,7 @@ export function SynthesisPanel({
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-white/90">
                   <span className="text-accent">
                     <SparklesIcon />
-                  </span>
+                  </span>{' '}
                   Síntesis del equipo
                 </h3>
                 <button

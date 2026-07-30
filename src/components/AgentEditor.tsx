@@ -149,19 +149,17 @@ function AvatarPicker({
             {ACCENTS.map((ac) => {
               const used = takenAvatars.includes(ac.id)
               const selected = ac.id === value
+              let stateCls: string
+              if (selected) stateCls = 'ring-2 ring-offset-2 ring-offset-elevated'
+              else if (used) stateCls = 'cursor-not-allowed opacity-25'
+              else stateCls = 'opacity-75 hover:bg-white/[0.05] hover:opacity-100'
               return (
                 <button
                   type="button"
                   key={ac.id}
                   onClick={() => { if (!used) { onChange(ac.id); setOpen(false) } }}
                   disabled={used}
-                  className={`rounded-xl p-1 transition ${
-                    selected
-                      ? 'ring-2 ring-offset-2 ring-offset-elevated'
-                      : used
-                        ? 'cursor-not-allowed opacity-25'
-                        : 'opacity-75 hover:bg-white/[0.05] hover:opacity-100'
-                  }`}
+                  className={`rounded-xl p-1 transition ${stateCls}`}
                   style={selected ? ({ ['--tw-ring-color' as string]: ac.color }) : undefined}
                 >
                   <AgentRobot id={ac.id} size={36} />
@@ -236,7 +234,7 @@ export function AgentEditor({
       : { ...d, model: list.find((m) => /gpt.*mini/i.test(m.id))?.id ?? list[0]?.id ?? d.model }
 
   const selectCli = (cli: AgentCli) => {
-    if (availability && availability[cli] && !availability[cli].available) return
+    if (availability?.[cli] && !availability[cli].available) return
     setDraft((d) => normalizeModel({ ...d, cli }, modelsByCli[cli] ?? []))
   }
 

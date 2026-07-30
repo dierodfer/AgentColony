@@ -47,12 +47,13 @@ function buildPrompt(agent: AgentConfig, userPrompt: string, shared?: SharedCont
 
   if (shared && shared.partners.length > 0) {
     const mem = shared.partners.map((p) => `${p.name}: ${p.text}`).join('\n\n')
+    // Limitación conocida: solo se comparte el texto de la ronda anterior; los
+    // MCPs de los agentes enlazados no se propagan.
     parts.push(
       '## Memoria compartida del equipo\n' +
         'Compañeros con los que compartes memoria respondieron en la ronda ' +
         `anterior:\n\n${mem}\n\nTenlo en cuenta al elaborar tu respuesta.`,
     )
-    // TODO: compartir también los MCPs de los agentes enlazados (pendiente).
   }
 
   parts.push(
@@ -60,8 +61,8 @@ function buildPrompt(agent: AgentConfig, userPrompt: string, shared?: SharedCont
       'texto plano y conversacional. No uses listas, ni numeración, ni markdown ' +
       '(nada de **, #, viñetas). Sin preámbulos ni saludos. No explores archivos ' +
       'ni ejecutes herramientas; responde solo con tu opinión experta.',
+    `Pregunta:\n${userPrompt}`,
   )
-  parts.push(`Pregunta:\n${userPrompt}`)
 
   return parts.join('\n\n')
 }
@@ -124,7 +125,7 @@ interface AgentProcess {
  * permite cancelar. Solo una ronda activa a la vez.
  */
 export class OfficeRunner {
-  private running = new Map<string, AgentProcess>()
+  private readonly running = new Map<string, AgentProcess>()
 
   get isRunning(): boolean {
     return this.running.size > 0
@@ -324,6 +325,6 @@ export class OfficeRunner {
   /** Intenta extraer un mensaje de error legible de stderr. */
   private extractError(stderr: string): string {
     const errLine = stderr.split('\n').find((l) => /error/i.test(l))
-    return errLine?.trim() || stderr.trim().split('\n').slice(-1)[0]?.trim() || ''
+    return errLine?.trim() || stderr.trim().split('\n').at(-1)?.trim() || ''
   }
 }

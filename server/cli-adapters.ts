@@ -427,7 +427,7 @@ export function runOnce(
     child.on('close', (code) => {
       if (fatalErr) return finish(new Error(fatalErr))
       if (code === 0) finish(null, adapter.finalText(full, state).trim())
-      else finish(new Error(stderrOut.trim().split('\n').slice(-1)[0] || `${adapter.bin} salió con código ${code}`))
+      else finish(new Error(stderrOut.trim().split('\n').at(-1) || `${adapter.bin} salió con código ${code}`))
     })
 
     const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), timeoutMs)
@@ -482,7 +482,7 @@ export function listOpencodeModels(timeoutMs = 15_000): Promise<string[]> {
     child.on('error', (e) => finish(new Error(`No se pudo ejecutar opencode: ${e.message}`)))
     child.on('close', (code) => {
       if (code === 0) finish(null, parseOpencodeModelLines(out))
-      else finish(new Error(stripAnsi(err || out).trim().split('\n').slice(-1)[0] || `opencode salió con código ${code}`))
+      else finish(new Error(stripAnsi(err || out).trim().split('\n').at(-1) || `opencode salió con código ${code}`))
     })
 
     const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), timeoutMs)

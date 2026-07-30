@@ -56,7 +56,8 @@ export function parseModelsFromOutput(raw: string): ModelOption[] {
     .filter((id): id is string => typeof id === 'string' && id.trim() !== '')
     .map((id) => ({ id, label: labelFor(id) }))
   // Si el CLI ofrece "auto", lo mostramos primero (opción recomendada).
-  models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
+  const autoFirst = (id: string) => (id === 'auto' ? 0 : 1)
+  models.sort((a, b) => autoFirst(a.id) - autoFirst(b.id))
   return models
 }
 

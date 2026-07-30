@@ -103,7 +103,7 @@ export function AgentNode({
   onStartLink: () => void
   onLinkTarget: () => void
 }>) {
-  const seed = useMemo(() => [...agent.id].reduce((a, c) => a + c.charCodeAt(0), 0), [agent.id])
+  const seed = useMemo(() => [...agent.id].reduce((a, c) => a + (c.codePointAt(0) ?? 0), 0), [agent.id])
   const bobAmplitude = 6 + (seed % 5)
   const bobDuration = 3.4 + (seed % 5) * 0.4
   const bobDelay = (seed % 10) / 5
@@ -114,7 +114,9 @@ export function AgentNode({
   // En modo enlace: los demás nodos son objetivos (aro pulsante); el origen se
   // resalta con el acento. Fuera de modo enlace, comportamiento normal (drag).
   const isTarget = linkingActive && !linking
-  const ringColor = linking ? accent : isTarget ? 'var(--color-st-thinking)' : null
+  let ringColor: string | null = null
+  if (linking) ringColor = accent
+  else if (isTarget) ringColor = 'var(--color-st-thinking)'
 
   return (
     <motion.div

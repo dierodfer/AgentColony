@@ -159,9 +159,9 @@ export function UsageSummary({
       {modal === 'aic' && (
         <Modal title="AIC por petición" onClose={() => setModal(null)}>
           <div className="space-y-1.5">
-            {runHistory.map((r, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3">
-                <span className="truncate text-[13px] text-white/60" title={r.prompt}>#{i + 1} {r.prompt}</span>
+            {runHistory.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3">
+                <span className="truncate text-[13px] text-white/60" title={r.prompt}>#{r.id} {r.prompt}</span>
                 <span className="shrink-0 font-semibold text-accent">{r.aic.toFixed(2)}</span>
               </div>
             ))}
@@ -176,9 +176,9 @@ export function UsageSummary({
       {modal === 'tokens' && (
         <Modal title="Tokens por petición" onClose={() => setModal(null)}>
           <div className="space-y-1.5">
-            {runHistory.map((r, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3">
-                <span className="truncate text-[13px] text-white/60" title={r.prompt}>#{i + 1} {r.prompt}</span>
+            {runHistory.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3">
+                <span className="truncate text-[13px] text-white/60" title={r.prompt}>#{r.id} {r.prompt}</span>
                 <span className="shrink-0 font-semibold text-white/85">{r.tokens.toLocaleString()}</span>
               </div>
             ))}
@@ -196,8 +196,8 @@ export function UsageSummary({
             <p className="text-sm text-white/40">Sin peticiones aún.</p>
           ) : (
             <div className="space-y-2">
-              {history.map((q, i) => (
-                <div key={i} className="flex items-start gap-3 rounded-xl border border-line bg-surface p-3">
+              {history.map((q) => (
+                <div key={q} className="flex items-start gap-3 rounded-xl border border-line bg-surface p-3">
                   <p className="flex-1 text-[13px] leading-snug text-white/70">{q}</p>
                   <button
                     type="button"

@@ -9,6 +9,11 @@ import { CliLogo } from './CliLogo'
  * disponibilidad (verde/rojo).
  */
 
+/** Color del punto de estado: verde si el CLI está instalado, rojo si no. */
+function dotColor(available: boolean): string {
+  return available ? 'var(--color-st-finished)' : 'var(--color-st-error)'
+}
+
 export function CliBadge({
   cli,
   size = 20,
@@ -20,10 +25,9 @@ export function CliBadge({
   available?: boolean
 }>) {
   const meta = cliInfo(cli)
-  const dot = available === undefined ? null : available ? 'var(--color-st-finished)' : 'var(--color-st-error)'
-  const title = available === undefined
-    ? meta.label
-    : `${meta.label} · ${available ? 'disponible' : 'no disponible'}`
+  const known = available !== undefined
+  const dot = known ? dotColor(available) : null
+  const title = known ? `${meta.label} · ${available ? 'disponible' : 'no disponible'}` : meta.label
 
   return (
     <span

@@ -22,7 +22,7 @@ const AGENT_NAMES = [
 
 type Editing = { mode: 'new' } | { mode: 'edit'; agent: AgentConfig } | null
 
-const WORKING: AgentStatus[] = ['starting', 'thinking', 'responding']
+const WORKING = new Set<AgentStatus>(['starting', 'thinking', 'responding'])
 
 export default function App() {
   const data = useOfficeData()
@@ -86,7 +86,7 @@ export default function App() {
 
   const states = data.agents.map((a) => runtime[a.id]?.status ?? 'idle')
   const total = data.agents.length
-  const workingCount = states.filter((s) => WORKING.includes(s)).length
+  const workingCount = states.filter((s) => WORKING.has(s)).length
   const doneCount = states.filter((s) => s === 'finished').length
   const errorCount = states.filter((s) => s === 'error').length
 

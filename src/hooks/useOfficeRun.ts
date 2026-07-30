@@ -1,7 +1,13 @@
 import { useCallback, useReducer, useRef, useState } from 'react'
 import type { AgentRuntime, ServerMessage } from '../types'
 
-export interface RunEntry { aic: number; tokens: number; prompt: string }
+export interface RunEntry {
+  /** Número de ronda (1, 2, 3…). Identidad estable de la entrada. */
+  id: number
+  aic: number
+  tokens: number
+  prompt: string
+}
 
 export interface RunState {
   agents: Record<string, AgentRuntime>
@@ -29,11 +35,12 @@ type Action =
 function applyReset(state: RunState, ids: string[], prompt: string): RunState {
   const agents: Record<string, AgentRuntime> = {}
   for (const id of ids) agents[id] = EMPTY
+  const round = state.requestCount + 1
   return {
     ...state,
     agents,
-    requestCount: state.requestCount + 1,
-    runHistory: [...state.runHistory, { aic: 0, tokens: 0, prompt }],
+    requestCount: round,
+    runHistory: [...state.runHistory, { id: round, aic: 0, tokens: 0, prompt }],
   }
 }
 

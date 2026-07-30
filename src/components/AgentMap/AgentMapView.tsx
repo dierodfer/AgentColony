@@ -287,8 +287,8 @@ export function AgentMapView({
         {linkingFrom && (
           <div className="pointer-events-none absolute inset-x-0 bottom-6 z-40 flex justify-center px-4">
             <div className="pointer-events-auto rounded-full border border-st-thinking/40 bg-elevated/90 px-4 py-1.5 text-xs font-medium text-white/80 shadow-lg shadow-black/40 backdrop-blur">
-              Elige otro robot para compartir memoria · pulsa de nuevo para desconectar ·
-              <span className="text-white/50"> Esc para cancelar</span>
+              Elige otro robot para compartir memoria · pulsa de nuevo para desconectar ·{' '}
+              <span className="text-white/50">Esc para cancelar</span>
             </div>
           </div>
         )}

@@ -12,7 +12,7 @@ describe('reducer de la ronda', () => {
     expect(Object.keys(s.agents)).toEqual(['a', 'b'])
     expect(s.agents.a.status).toBe('idle')
     expect(s.requestCount).toBe(1)
-    expect(s.runHistory).toEqual([{ aic: 0, tokens: 0, prompt: '¿qué tal?' }])
+    expect(s.runHistory).toEqual([{ id: 1, aic: 0, tokens: 0, prompt: '¿qué tal?' }])
   })
 
   it('agent-update guarda estado y texto', () => {
@@ -64,7 +64,7 @@ describe('reducer de la ronda', () => {
     expect(s.agents.a.aic).toBe(3)
     expect(s.agents.a.inputTokens).toBe(11)
     expect(s.agents.a.outputTokens).toBe(6)
-    expect(s.runHistory.at(-1)).toEqual({ aic: 3, tokens: 17, prompt: 'p' })
+    expect(s.runHistory.at(-1)).toEqual({ id: 1, aic: 3, tokens: 17, prompt: 'p' })
   })
 
   it('el consumo se imputa solo a la última ronda', () => {
@@ -73,8 +73,8 @@ describe('reducer de la ronda', () => {
     s = reset(s, ['a'], 'segunda')
     s = reducer(s, { type: 'event', msg: { type: 'agent-usage', agentId: 'a', aic: 5, inputTokens: 0, outputTokens: 0 } })
 
-    expect(s.runHistory[0]).toEqual({ aic: 1, tokens: 2, prompt: 'primera' })
-    expect(s.runHistory[1]).toEqual({ aic: 5, tokens: 0, prompt: 'segunda' })
+    expect(s.runHistory[0]).toEqual({ id: 1, aic: 1, tokens: 2, prompt: 'primera' })
+    expect(s.runHistory[1]).toEqual({ id: 2, aic: 5, tokens: 0, prompt: 'segunda' })
     expect(s.requestCount).toBe(2)
   })
 

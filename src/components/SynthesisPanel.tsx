@@ -17,10 +17,10 @@ function SparklesIcon() {
 export function SynthesisPanel({
   question,
   answers,
-}: {
+}: Readonly<{
   question: string
   answers: { name: string; text: string }[]
-}) {
+}>) {
   const { text, loading, error, synthesize, reset } = useSynthesis()
   if (answers.length < 2) return null
   const open = loading || error !== null || text !== null
@@ -28,6 +28,7 @@ export function SynthesisPanel({
   return (
     <>
       <button
+        type="button"
         onClick={() => synthesize(question, answers)}
         disabled={loading}
         title="Combinar las respuestas del equipo en una conclusión"
@@ -61,6 +62,7 @@ export function SynthesisPanel({
                   Síntesis del equipo
                 </h3>
                 <button
+                  type="button"
                   onClick={reset}
                   className="text-lg leading-none text-white/40 transition-colors hover:text-white/80"
                 >

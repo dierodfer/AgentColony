@@ -53,7 +53,7 @@ export function AgentMapView({
   cliStatus,
   question,
   answers,
-}: {
+}: Readonly<{
   agents: AgentConfig[]
   runtime: Record<string, AgentRuntime>
   templates: AgentTemplate[]
@@ -77,7 +77,7 @@ export function AgentMapView({
   cliStatus: Record<AgentCli, CliAvailability> | null
   question: string
   answers: { name: string; text: string }[]
-}) {
+}>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [overrides, setOverrides] = useState<Record<string, NodePos>>({})
@@ -256,6 +256,7 @@ export function AgentMapView({
             if (!pa || !pb) return null
             return (
               <button
+                type="button"
                 key={`unlink-${linkKey(a, b)}`}
                 onClick={(e) => {
                   e.stopPropagation()

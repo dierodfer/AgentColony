@@ -12,7 +12,7 @@ const STATUS_META: Record<AgentStatus, { label: string; color: string; pulse: bo
 }
 
 /** Indicador compacto del estado actual del agente: punto + etiqueta. */
-export function StatusBadge({ status }: { status: AgentStatus }) {
+export function StatusBadge({ status }: Readonly<{ status: AgentStatus }>) {
   const meta = STATUS_META[status]
   return (
     <span

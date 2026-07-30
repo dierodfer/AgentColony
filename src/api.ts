@@ -10,14 +10,28 @@ export interface CliAvailability {
 
 // Wrappers tipados sobre las rutas REST que expone el plugin de Vite.
 
+/**
+ * Acota cada petición al backend propio: sólo rutas relativas bajo `/api/`.
+ * Los ids que forman parte de la ruta vienen de datos de usuario, así que se
+ * valida el resultado antes de llamar a `fetch` para que nunca pueda apuntar a
+ * un host externo (`//evil.com`, `https://…`) ni escapar del prefijo con `..`.
+ */
+function apiUrl(url: string): string {
+  const path = url.split('?')[0]
+  if (!/^\/api\/[^/\\]/.test(path) || path.includes('..')) {
+    throw new Error(`Ruta de API no permitida: ${url}`)
+  }
+  return url
+}
+
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+  const res = await fetch(apiUrl(url))
   if (!res.ok) throw new Error(`GET ${url} → ${res.status}`)
   return res.json() as Promise<T>
 }
 
 async function sendJson<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

@@ -21,7 +21,7 @@ export function AgentGrid({
   onAdd,
   onEdit,
   onDelete,
-}: {
+}: Readonly<{
   agents: AgentConfig[]
   runtime: Record<string, AgentRuntime>
   templates: AgentTemplate[]
@@ -32,7 +32,7 @@ export function AgentGrid({
   onAdd: () => void
   onEdit: (agent: AgentConfig) => void
   onDelete: (agent: AgentConfig) => void
-}) {
+}>) {
   const templateNameOf = (file: string) =>
     templates.find((t) => t.file === file)?.name ?? 'Especialista'
   const modelLabelOf = (id: string) => models.find((m) => m.id === id)?.label ?? id
@@ -59,6 +59,7 @@ export function AgentGrid({
           una misma petición.
         </p>
         <button
+          type="button"
           onClick={onAdd}
           className="mt-1 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-strong"
         >
@@ -88,6 +89,7 @@ export function AgentGrid({
 
       {canAdd && (
         <motion.button
+          type="button"
           layout
           onClick={onAdd}
           initial={{ opacity: 0, y: 12 }}

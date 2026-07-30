@@ -31,14 +31,14 @@ export function AgentBubble({
   anchor,
   side,
   bounds,
-}: {
+}: Readonly<{
   accent: string
   name: string
   runtime: AgentRuntime
   anchor: NodePos
   side: 'left' | 'right'
   bounds: { width: number; height: number }
-}) {
+}>) {
   const { status, text, error } = runtime
   const isWorking = status === 'starting' || status === 'thinking'
   const display = status === 'error' ? error || 'Algo salió mal.' : cleanText(text)
@@ -68,6 +68,7 @@ export function AgentBubble({
     <AnimatePresence>
       {collapsed ? (
         <motion.button
+          type="button"
           key="collapsed"
           onClick={() => setCollapsed(false)}
           initial={{ opacity: 0, scale: 0.6 }}
@@ -117,6 +118,7 @@ export function AgentBubble({
               <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">{name}</p>
               {(status === 'finished' || status === 'error') && (
                 <button
+                  type="button"
                   onClick={() => setCollapsed(true)}
                   className="text-[11px] text-white/30 hover:text-white/60"
                   aria-label="Minimizar"

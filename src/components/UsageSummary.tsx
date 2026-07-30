@@ -50,14 +50,14 @@ function RequestsIcon() {
 
 function Stat({
   icon, value, label, color = 'text-white/85', iconColor = 'text-white/40', onClick,
-}: {
+}: Readonly<{
   icon: React.ReactNode
   value: string
   label: string
   color?: string
   iconColor?: string
   onClick?: () => void
-}) {
+}>) {
   const inner = (
     <>
       <span className={`shrink-0 ${iconColor}`}>{icon}</span>
@@ -70,19 +70,19 @@ function Stat({
   return (
     <div className="flex flex-1 items-center gap-3 px-4 py-3">
       {onClick
-        ? <button onClick={onClick} className="flex w-full items-center gap-3 text-left transition-opacity hover:opacity-75">{inner}</button>
+        ? <button type="button" onClick={onClick} className="flex w-full items-center gap-3 text-left transition-opacity hover:opacity-75">{inner}</button>
         : inner}
     </div>
   )
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, onClose, children }: Readonly<{ title: string; onClose: () => void; children: React.ReactNode }>) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-line-strong bg-elevated p-5 shadow-2xl shadow-black/50" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white/90">{title}</h3>
-          <button onClick={onClose} className="text-lg leading-none text-white/40 transition-colors hover:text-white/80">×</button>
+          <button type="button" onClick={onClose} className="text-lg leading-none text-white/40 transition-colors hover:text-white/80">×</button>
         </div>
         {children}
       </div>
@@ -95,7 +95,7 @@ type ModalKey = 'aic' | 'tokens' | 'requests' | null
 export function UsageSummary({
   totalAic, completedCount: _c, totalAgents, totalTokens,
   avgElapsedMs, requestCount, runHistory, history, onSelectPrompt,
-}: {
+}: Readonly<{
   totalAic: number
   completedCount: number
   totalAgents: number
@@ -105,7 +105,7 @@ export function UsageSummary({
   runHistory: RunEntry[]
   history: string[]
   onSelectPrompt: (p: string) => void
-}) {
+}>) {
   const [modal, setModal] = useState<ModalKey>(null)
 
   return (
@@ -194,6 +194,7 @@ export function UsageSummary({
                 <div key={i} className="flex items-start gap-3 rounded-xl border border-line bg-surface p-3">
                   <p className="flex-1 text-[13px] leading-snug text-white/70">{q}</p>
                   <button
+                    type="button"
                     onClick={() => { onSelectPrompt(q); setModal(null) }}
                     className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-[12px] font-medium text-accent transition-colors hover:bg-accent/25"
                   >

@@ -7,13 +7,13 @@ export function HeroPrompt({
   isRunning,
   disabled,
   externalValue,
-}: {
+}: Readonly<{
   onAsk: (prompt: string) => void
   onCancel: () => void
   isRunning: boolean
   disabled: boolean
   externalValue?: string
-}) {
+}>) {
   const [value, setValue] = useState('')
 
   useEffect(() => {
@@ -52,6 +52,7 @@ export function HeroPrompt({
           />
           {isRunning ? (
             <button
+              type="button"
               onClick={onCancel}
               className="mb-1 shrink-0 rounded-xl border border-line-strong px-4 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
@@ -59,6 +60,7 @@ export function HeroPrompt({
             </button>
           ) : (
             <button
+              type="button"
               onClick={submit}
               disabled={disabled || !value.trim()}
               className="mb-1 shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-white/30"

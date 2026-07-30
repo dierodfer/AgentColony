@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import type { AgentStatus } from '../types'
+import { randomInt } from '../lib/random'
 
 // ---- Click animations (random) -----------------------------------------------
 
@@ -15,7 +16,7 @@ const CLICK_VARIANTS = {
 }
 
 function randomClickAnim(): ClickAnim {
-  return CLICK_ANIMS[Math.floor(Math.random() * CLICK_ANIMS.length)]
+  return CLICK_ANIMS[randomInt(CLICK_ANIMS.length)]
 }
 
 // Identidad visual de un agente: un robot-mascota animado (SVG paramétrico). El
@@ -89,7 +90,7 @@ function groupOf(status: AgentStatus): Group {
 const EYE_X = [19, 29] // centros horizontales de los dos ojos
 const EYE_Y = 25
 
-function NeutralEyes({ shape, color }: { shape: EyeShape; color: string }) {
+function NeutralEyes({ shape, color }: Readonly<{ shape: EyeShape; color: string }>) {
   return (
     <>
       {EYE_X.map((cx) => {
@@ -117,7 +118,7 @@ function HeartEyes() {
   )
 }
 
-function HappyEyes({ color }: { color: string }) {
+function HappyEyes({ color }: Readonly<{ color: string }>) {
   return (
     <g stroke={color} strokeWidth={2.4} strokeLinecap="round" fill="none">
       <path d="M15.6 24 Q19 28.6 22.4 24" />
@@ -126,7 +127,7 @@ function HappyEyes({ color }: { color: string }) {
   )
 }
 
-function ErrorEyes({ color }: { color: string }) {
+function ErrorEyes({ color }: Readonly<{ color: string }>) {
   return (
     <g stroke={color} strokeWidth={2} strokeLinecap="round">
       {EYE_X.map((cx) => (
@@ -149,11 +150,11 @@ export function AgentRobot({
   id,
   status = 'idle',
   size = 44,
-}: {
+}: Readonly<{
   id: string
   status?: AgentStatus
   size?: number
-}) {
+}>) {
   const { color, eye, eyes } = identityOf(id)
   const reduce = !!useReducedMotion()
   const uid = useId().replace(/:/g, '')

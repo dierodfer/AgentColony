@@ -40,7 +40,7 @@ function TemplatesIcon() {
   )
 }
 
-function ChevronIcon({ right }: { right: boolean }) {
+function ChevronIcon({ right }: Readonly<{ right: boolean }>) {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
       <path
@@ -61,16 +61,17 @@ function NavItem({
   icon,
   collapsed,
   onClick,
-}: {
+}: Readonly<{
   label: string
   count?: number
   active: boolean
   icon: ReactNode
   collapsed: boolean
   onClick: () => void
-}) {
+}>) {
   return (
     <button
+      type="button"
       onClick={onClick}
       title={collapsed ? label : undefined}
       className={`flex w-full items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors duration-150 ${
@@ -105,7 +106,7 @@ function NavGroup({
   expanded,
   onToggle,
   children,
-}: {
+}: Readonly<{
   label: string
   count?: number
   icon: ReactNode
@@ -114,10 +115,11 @@ function NavGroup({
   expanded: boolean
   onToggle: () => void
   children: ReactNode
-}) {
+}>) {
   return (
     <div>
       <button
+        type="button"
         onClick={onToggle}
         title={collapsed ? label : undefined}
         className={`flex w-full items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors duration-150 ${
@@ -154,11 +156,11 @@ export function Sidebar({
   active,
   agentCount,
   onNavigate,
-}: {
+}: Readonly<{
   active: SectionId
   agentCount: number
   onNavigate: (id: SectionId) => void
-}) {
+}>) {
   const [collapsed, setCollapsed] = useState(false)
   const [agentsExpanded, setAgentsExpanded] = useState(true)
   const agentsActive = active === 'agentes' || active === 'mapa'
@@ -182,6 +184,7 @@ export function Sidebar({
         )}
         {collapsed && <BrandMark />}
         <button
+          type="button"
           onClick={() => setCollapsed((v) => !v)}
           title={collapsed ? 'Expandir' : 'Colapsar'}
           className={`flex h-7 w-7 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70 ${collapsed ? 'mt-1' : ''}`}

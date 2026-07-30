@@ -53,7 +53,7 @@ function TrashIcon() {
   )
 }
 
-function SparkleIcon({ color }: { color: string }) {
+function SparkleIcon({ color }: Readonly<{ color: string }>) {
   return (
     <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden style={{ color }}>
       <path
@@ -84,7 +84,7 @@ function DatabaseIcon() {
 }
 
 /** Cuerpo de la respuesta, renderizado dentro de la propia tarjeta. */
-function ResponseBody({ runtime }: { runtime: AgentRuntime }) {
+function ResponseBody({ runtime }: Readonly<{ runtime: AgentRuntime }>) {
   const { status, text, error } = runtime
   const isWorking = status === 'starting' || status === 'thinking'
   const display = cleanText(text)
@@ -117,7 +117,7 @@ export function AgentCard({
   available,
   onEdit,
   onDelete,
-}: {
+}: Readonly<{
   agent: AgentConfig
   templateName: string
   model: string
@@ -126,7 +126,7 @@ export function AgentCard({
   available?: boolean
   onEdit: () => void
   onDelete: () => void
-}) {
+}>) {
   const rt = runtime ?? IDLE
   const [confirming, setConfirming] = useState(false)
   const [tokensOpen, setTokensOpen] = useState(false)
@@ -202,6 +202,7 @@ export function AgentCard({
         {confirming ? (
           <div className="flex shrink-0 items-center gap-1">
             <button
+              type="button"
               onClick={() => {
                 setConfirming(false)
                 onDelete()
@@ -211,6 +212,7 @@ export function AgentCard({
               Eliminar
             </button>
             <button
+              type="button"
               onClick={() => setConfirming(false)}
               className="rounded-md px-2 py-1.5 text-[11px] font-medium text-white/55 transition-colors hover:text-white/80"
             >
@@ -220,6 +222,7 @@ export function AgentCard({
         ) : (
           <div className="flex shrink-0 items-center gap-2">
             <button
+              type="button"
               onClick={onEdit}
               title="Editar agente"
               aria-label="Editar agente"
@@ -228,6 +231,7 @@ export function AgentCard({
               <PencilIcon />
             </button>
             <button
+              type="button"
               onClick={() => setConfirming(true)}
               title="Eliminar agente"
               aria-label="Eliminar agente"
@@ -257,6 +261,7 @@ export function AgentCard({
                 </span>
               ))}
               <button
+                type="button"
                 onClick={() => setSkillsOpen(false)}
                 className="rounded-lg border border-line bg-white/[0.03] px-2.5 py-1 text-[12px] font-medium text-white/35 hover:text-white/60"
               >
@@ -265,6 +270,7 @@ export function AgentCard({
             </>
           ) : (
             <button
+              type="button"
               onClick={() => setSkillsOpen(true)}
               className="rounded-lg border border-line bg-white/[0.03] px-2.5 py-1 text-[12px] font-medium text-white/55 hover:text-white/80"
             >
@@ -297,6 +303,7 @@ export function AgentCard({
           <div className="w-px self-stretch bg-line" />
           <div className="relative flex flex-1 items-center gap-3 pl-3">
             <button
+              type="button"
               onClick={() => setTokensOpen((v) => !v)}
               className="flex w-full items-center gap-3 text-left"
               title="Ver desglose de tokens"

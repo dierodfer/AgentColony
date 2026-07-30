@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { getPolicy, getSandboxCwd } from './cli-policy.ts'
+import { getPolicy, getSandboxCwd, spawnEnv } from './cli-policy.ts'
 import type { AgentCli } from './types.ts'
 
 /**
@@ -274,6 +274,7 @@ export function checkAvailability(cli: AgentCli): Promise<AvailabilityResult> {
       child = spawn(adapter.bin, adapter.versionArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: getPolicy(cli).isolateCwd ? getSandboxCwd() : process.cwd(),
+        env: spawnEnv(getPolicy(cli)),
       })
     } catch (e) {
       resolve({ cli, available: false, error: (e as Error).message })
@@ -364,7 +365,7 @@ export function runOnce(
     try {
       child = spawn(adapter.bin, [...adapter.runArgs(prompt, model), ...policy.readOnlyArgs, ...extraArgs], {
         cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
-        env: { ...process.env, ...policy.env },
+        env: spawnEnv(policy),
       })
     } catch (e) {
       reject(new Error(`No se pudo iniciar ${adapter.bin}: ${(e as Error).message}`))
@@ -430,7 +431,7 @@ export function listOpencodeModels(timeoutMs = 15_000): Promise<string[]> {
     try {
       child = spawn('opencode', ['models'], {
         cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
-        env: { ...process.env, ...policy.env },
+        env: spawnEnv(policy),
       })
     } catch (e) {
       reject(new Error(`No se pudo ejecutar opencode: ${(e as Error).message}`))

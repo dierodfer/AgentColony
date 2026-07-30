@@ -52,7 +52,7 @@ export function AgentNode({
   linkingActive,
   onStartLink,
   onLinkTarget,
-}: {
+}: Readonly<{
   agent: AgentConfig
   status: AgentStatus
   accent: string
@@ -69,7 +69,7 @@ export function AgentNode({
   linkingActive: boolean
   onStartLink: () => void
   onLinkTarget: () => void
-}) {
+}>) {
   const seed = useMemo(() => [...agent.id].reduce((a, c) => a + c.charCodeAt(0), 0), [agent.id])
   const bobAmplitude = 6 + (seed % 5)
   const bobDuration = 3.4 + (seed % 5) * 0.4
@@ -143,6 +143,7 @@ export function AgentNode({
           {/* Botón conectar: aparece al hover, fuera del modo enlace. */}
           {!linkingActive && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onStartLink()
@@ -157,6 +158,7 @@ export function AgentNode({
           )}
         </div>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation()
             if (linkingActive) onLinkTarget()

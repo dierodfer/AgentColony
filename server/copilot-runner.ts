@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { getAgentTemplateBody, getSkillBody, getSkills } from './config-reader.ts'
 import { getAdapter, type LineHandlers } from './cli-adapters.ts'
-import { getPolicy, getSandboxCwd } from './cli-policy.ts'
+import { getPolicy, getSandboxCwd, spawnEnv } from './cli-policy.ts'
 import type { AgentConfig, MemoryLink, ServerMessage } from './types.ts'
 
 const MAX_PARALLEL = 8
@@ -189,7 +189,7 @@ export class OfficeRunner {
       try {
         child = spawn(adapter.bin, args, {
           cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
-          env: { ...process.env, ...policy.env },
+          env: spawnEnv(policy),
         })
       } catch (err) {
         send({

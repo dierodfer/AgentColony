@@ -17,7 +17,7 @@ const PATHS: Record<AgentCli, string> = {
   opencode: 'M22 24H2V0h20zM17 4.8H7v14.4h10z',
 }
 
-export function CliLogo({ cli, size = 16 }: { cli: AgentCli; size?: number }) {
+export function CliLogo({ cli, size = 16 }: Readonly<{ cli: AgentCli; size?: number }>) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden>
       <path d={PATHS[cli] ?? PATHS.copilot} fill="currentColor" />

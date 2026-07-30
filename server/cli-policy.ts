@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AgentCli } from './types.ts'
 
@@ -73,6 +73,26 @@ export function getPolicy(cli: AgentCli): CliPolicy {
   const base = DEFAULT_POLICIES[cli] ?? DEFAULT_POLICIES.copilot
   const override = loadUserOverrides()[cli]
   return override ? { ...base, ...override } : base
+}
+
+/**
+ * PATH saneado para los procesos hijo: se descartan las entradas relativas
+ * (`.`, `bin`, la cadena vacía — que Node resuelve contra el cwd), que son el
+ * vector clásico de PATH hijacking: bastaría con dejar un ejecutable llamado
+ * `claude` u `opencode` en el directorio de trabajo para suplantar al CLI real.
+ * Las rutas absolutas del usuario (nvm, ~/.local/bin, Homebrew) se conservan
+ * para no romper instalaciones legítimas.
+ */
+export function sanitizePath(rawPath = process.env.PATH ?? ''): string {
+  return rawPath
+    .split(delimiter)
+    .filter((entry) => entry.length > 0 && isAbsolute(entry))
+    .join(delimiter)
+}
+
+/** Entorno con el que lanzar un CLI: el del proceso, con PATH saneado y los extras de la política. */
+export function spawnEnv(policy: CliPolicy): NodeJS.ProcessEnv {
+  return { ...process.env, PATH: sanitizePath(), ...policy.env }
 }
 
 /** Directorio aislado y vacío (fuera del repo) donde ejecutar los procesos. */

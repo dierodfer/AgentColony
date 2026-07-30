@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
 import { CliLogo } from './CliLogo'
 import { CLIS } from '../lib/clis'
+import { randomItem } from '../lib/random'
 import { api, type CliAvailability } from '../api'
 import type { ModelsByCli } from '../hooks/useOfficeData'
 import type {
@@ -57,11 +58,11 @@ function AvatarPicker({
   value,
   takenAvatars,
   onChange,
-}: {
+}: Readonly<{
   value: string
   takenAvatars: string[]
   onChange: (id: string) => void
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -77,6 +78,7 @@ function AvatarPicker({
   return (
     <div ref={ref} className="relative shrink-0">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className="rounded-2xl p-1 transition hover:bg-white/[0.06]"
       >
@@ -97,6 +99,7 @@ function AvatarPicker({
               const selected = ac.id === value
               return (
                 <button
+                  type="button"
                   key={ac.id}
                   onClick={() => { if (!used) { onChange(ac.id); setOpen(false) } }}
                   disabled={used}
@@ -134,7 +137,7 @@ export function AgentEditor({
   onSave,
   onCreateSkill,
   onCreateTemplate,
-}: Props) {
+}: Readonly<Props>) {
   const [draft, setDraft] = useState<AgentDraft>(initial)
   const nameTaken = takenNames.includes(draft.name.trim().toLowerCase())
   /** Modelos del CLI actualmente seleccionado. */
@@ -142,12 +145,10 @@ export function AgentEditor({
 
   const randomize = () => {
     const freeAvatars = ACCENTS.map((a) => a.id).filter((id) => !takenAvatars.includes(id))
-    const newAvatar = freeAvatars.length > 0
-      ? freeAvatars[Math.floor(Math.random() * freeAvatars.length)]
-      : draft.avatar
+    const newAvatar = randomItem(freeAvatars) ?? draft.avatar
     const freeNames = RANDOM_NAMES.filter((n) => !takenNames.includes(n.toLowerCase()))
     const pool = freeNames.length > 0 ? freeNames : RANDOM_NAMES
-    const newName = pool[Math.floor(Math.random() * pool.length)]
+    const newName = randomItem(pool) ?? draft.name
     setDraft((d) => ({ ...d, avatar: newAvatar, name: newName }))
   }
   const [newSkill, setNewSkill] = useState<{ name: string; body: string; applyTo: string } | null>(null)
@@ -246,6 +247,7 @@ export function AgentEditor({
       >
         {/* Cierre en la esquina superior derecha (sin título ni botón Cancelar). */}
         <button
+          type="button"
           onClick={onCancel}
           title="Cerrar"
           aria-label="Cerrar"
@@ -273,6 +275,7 @@ export function AgentEditor({
             className={`${nameTaken ? 'border-st-error/50' : ''} ${fieldCls}`}
           />
           <button
+            type="button"
             onClick={randomize}
             title="Nombre e icono aleatorio"
             className="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg border border-line text-white/40 transition-colors hover:border-line-strong hover:text-white/80"
@@ -312,6 +315,7 @@ export function AgentEditor({
                 : `${c.label} · no instalado${check.error ? ` — ${check.error}` : ''}`
             return (
               <button
+                type="button"
                 key={c.id}
                 onClick={() => selectCli(c.id)}
                 disabled={unavailable}
@@ -383,6 +387,7 @@ export function AgentEditor({
         <div className="mb-2 flex items-center justify-between">
           <label className={labelCls + ' mb-0'}>Agentes Plantilla</label>
           <button
+            type="button"
             onClick={() => setNewTemplate({ name: '', body: '' })}
             className="text-xs font-medium text-accent transition-colors hover:text-accent-strong"
           >
@@ -395,6 +400,7 @@ export function AgentEditor({
             const on = draft.agentFile === t.file
             return (
               <button
+                type="button"
                 key={t.file}
                 onClick={() => setDraft((d) => ({ ...d, agentFile: on ? '' : t.file }))}
                 className={`rounded-lg px-3 py-1 text-sm font-medium transition-colors ${
@@ -438,6 +444,7 @@ export function AgentEditor({
         <div className="mb-2 flex items-center justify-between">
           <label className={labelCls + ' mb-0'}>Skills</label>
           <button
+            type="button"
             onClick={() => setNewSkill({ name: '', body: '', applyTo: '' })}
             className="text-xs font-medium text-accent transition-colors hover:text-accent-strong"
           >
@@ -450,6 +457,7 @@ export function AgentEditor({
             const on = draft.skills.includes(s.id)
             return (
               <button
+                type="button"
                 key={s.id}
                 onClick={() => toggleSkill(s.id)}
                 title={s.applyTo ? `Aplica a: ${s.applyTo}` : undefined}
@@ -498,6 +506,7 @@ export function AgentEditor({
 
         <div className="mt-6 flex justify-end">
           <button
+            type="button"
             onClick={() => onSave({ ...draft, name: draft.name.trim() })}
             disabled={!draft.name.trim() || !draft.agentFile || nameTaken}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-white/30"
@@ -518,26 +527,28 @@ function InlineCreate({
   onCancel,
   onSubmit,
   children,
-}: {
+}: Readonly<{
   title: string
   busy: boolean
   disabled: boolean
   onCancel: () => void
   onSubmit: () => void
   children: ReactNode
-}) {
+}>) {
   return (
     <div className="mb-4 space-y-2 rounded-xl border border-accent/25 bg-accent-weak p-3">
       <p className="text-xs font-medium text-accent">{title}</p>
       {children}
       <div className="flex justify-end gap-2 pt-1">
         <button
+          type="button"
           onClick={onCancel}
           className="rounded-lg px-3 py-1 text-xs font-medium text-white/55 transition-colors hover:text-white/85"
         >
           Cancelar
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           disabled={disabled || busy}
           className="rounded-lg bg-accent px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-40"

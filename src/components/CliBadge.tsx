@@ -13,12 +13,12 @@ export function CliBadge({
   cli,
   size = 20,
   available,
-}: {
+}: Readonly<{
   cli: AgentCli
   size?: number
   /** true=verde, false=rojo, undefined=sin indicador. */
   available?: boolean
-}) {
+}>) {
   const meta = cliInfo(cli)
   const dot = available === undefined ? null : available ? 'var(--color-st-finished)' : 'var(--color-st-error)'
   const title = available === undefined

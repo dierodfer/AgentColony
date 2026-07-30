@@ -8,7 +8,7 @@ const fieldCls =
 
 // ---- Template item ----------------------------------------------------------
 
-function TemplateItem({ tpl, onReload }: { tpl: AgentTemplate; onReload: () => void }) {
+function TemplateItem({ tpl, onReload }: Readonly<{ tpl: AgentTemplate; onReload: () => void }>) {
   const [open, setOpen] = useState(false)
   const [body, setBody] = useState('')
   const [name, setName] = useState(tpl.name)
@@ -63,6 +63,7 @@ function TemplateItem({ tpl, onReload }: { tpl: AgentTemplate; onReload: () => v
   return (
     <div className="border-b border-line last:border-b-0">
       <button
+        type="button"
         onClick={toggle}
         className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-white/[0.03]"
       >
@@ -97,6 +98,7 @@ function TemplateItem({ tpl, onReload }: { tpl: AgentTemplate; onReload: () => v
               />
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={save}
                   disabled={loading || !name.trim()}
                   className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-40"
@@ -106,12 +108,14 @@ function TemplateItem({ tpl, onReload }: { tpl: AgentTemplate; onReload: () => v
                 {confirming ? (
                   <>
                     <button
+                      type="button"
                       onClick={remove}
                       className="rounded-lg bg-st-error/15 px-3 py-1.5 text-xs font-medium text-st-error transition-colors hover:bg-st-error/25"
                     >
                       Confirmar eliminación
                     </button>
                     <button
+                      type="button"
                       onClick={() => setConfirming(false)}
                       className="px-2 py-1.5 text-xs text-white/50 hover:text-white/80"
                     >
@@ -120,6 +124,7 @@ function TemplateItem({ tpl, onReload }: { tpl: AgentTemplate; onReload: () => v
                   </>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => setConfirming(true)}
                     className="px-2 py-1.5 text-xs text-white/35 transition-colors hover:text-st-error"
                   >
@@ -137,7 +142,7 @@ function TemplateItem({ tpl, onReload }: { tpl: AgentTemplate; onReload: () => v
 
 // ---- Skill item -------------------------------------------------------------
 
-function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void }) {
+function SkillItem({ skill, onReload }: Readonly<{ skill: SkillInfo; onReload: () => void }>) {
   const [open, setOpen] = useState(false)
   const [body, setBody] = useState('')
   const [name, setName] = useState(skill.name)
@@ -194,6 +199,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
   return (
     <div className="border-b border-line last:border-b-0">
       <button
+        type="button"
         onClick={toggle}
         className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-white/[0.03]"
       >
@@ -247,6 +253,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
               />
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={save}
                   disabled={loading || !name.trim()}
                   className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-40"
@@ -256,12 +263,14 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
                 {confirming ? (
                   <>
                     <button
+                      type="button"
                       onClick={remove}
                       className="rounded-lg bg-st-error/15 px-3 py-1.5 text-xs font-medium text-st-error transition-colors hover:bg-st-error/25"
                     >
                       Confirmar
                     </button>
                     <button
+                      type="button"
                       onClick={() => setConfirming(false)}
                       className="px-2 py-1.5 text-xs text-white/50 hover:text-white/80"
                     >
@@ -270,6 +279,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
                   </>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => setConfirming(true)}
                     className="px-2 py-1.5 text-xs text-white/35 transition-colors hover:text-st-error"
                   >
@@ -287,7 +297,7 @@ function SkillItem({ skill, onReload }: { skill: SkillInfo; onReload: () => void
 
 // ---- Create forms -----------------------------------------------------------
 
-function CreateTemplateForm({ onDone }: { onDone: () => void }) {
+function CreateTemplateForm({ onDone }: Readonly<{ onDone: () => void }>) {
   const [name, setName] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -325,8 +335,9 @@ function CreateTemplateForm({ onDone }: { onDone: () => void }) {
         className={`resize-none ${fieldCls}`}
       />
       <div className="flex justify-end gap-2">
-        <button onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
+        <button type="button" onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
         <button
+          type="button"
           onClick={submit}
           disabled={!name.trim() || busy}
           className="rounded-lg bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-40"
@@ -338,7 +349,7 @@ function CreateTemplateForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-function GenerateTemplateForm({ onDone }: { onDone: () => void }) {
+function GenerateTemplateForm({ onDone }: Readonly<{ onDone: () => void }>) {
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -372,8 +383,9 @@ function GenerateTemplateForm({ onDone }: { onDone: () => void }) {
         className={`resize-none ${fieldCls}`}
       />
       <div className="flex justify-end gap-2">
-        <button onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
+        <button type="button" onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
         <button
+          type="button"
           onClick={submit}
           disabled={!prompt.trim() || busy}
           className="rounded-lg bg-st-thinking px-3 py-1 text-xs font-medium text-white hover:brightness-110 disabled:opacity-40"
@@ -385,7 +397,7 @@ function GenerateTemplateForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-function GenerateSkillForm({ onDone }: { onDone: () => void }) {
+function GenerateSkillForm({ onDone }: Readonly<{ onDone: () => void }>) {
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -419,8 +431,9 @@ function GenerateSkillForm({ onDone }: { onDone: () => void }) {
         className={`resize-none ${fieldCls}`}
       />
       <div className="flex justify-end gap-2">
-        <button onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
+        <button type="button" onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
         <button
+          type="button"
           onClick={submit}
           disabled={!prompt.trim() || busy}
           className="rounded-lg bg-st-thinking px-3 py-1 text-xs font-medium text-white hover:brightness-110 disabled:opacity-40"
@@ -432,7 +445,7 @@ function GenerateSkillForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-function CreateSkillForm({ onDone }: { onDone: () => void }) {
+function CreateSkillForm({ onDone }: Readonly<{ onDone: () => void }>) {
   const [name, setName] = useState('')
   const [body, setBody] = useState('')
   const [applyTo, setApplyTo] = useState('')
@@ -477,8 +490,9 @@ function CreateSkillForm({ onDone }: { onDone: () => void }) {
         className={`resize-none ${fieldCls}`}
       />
       <div className="flex justify-end gap-2">
-        <button onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
+        <button type="button" onClick={onDone} className="px-3 py-1 text-xs text-white/55 hover:text-white/85">Cancelar</button>
         <button
+          type="button"
           onClick={submit}
           disabled={!name.trim() || busy}
           className="rounded-lg bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-strong disabled:opacity-40"
@@ -496,11 +510,11 @@ export function TemplatesView({
   templates,
   skills,
   onReload,
-}: {
+}: Readonly<{
   templates: AgentTemplate[]
   skills: SkillInfo[]
   onReload: () => Promise<void>
-}) {
+}>) {
   const [creatingTpl, setCreatingTpl] = useState(false)
   const [generatingTpl, setGeneratingTpl] = useState(false)
   const [creatingSkill, setCreatingSkill] = useState(false)
@@ -524,12 +538,14 @@ export function TemplatesView({
             <h2 className="text-sm font-medium text-white/50">Agent Templates</h2>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => { setGeneratingTpl(!generatingTpl); setCreatingTpl(false) }}
                 className="rounded-lg border border-st-thinking/30 bg-st-thinking/[0.08] px-3 py-1.5 text-xs font-medium text-st-thinking transition-colors hover:bg-st-thinking/[0.15]"
               >
                 Generar con IA
               </button>
               <button
+                type="button"
                 onClick={() => { setCreatingTpl(!creatingTpl); setGeneratingTpl(false) }}
                 className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-white/65 transition-colors hover:border-line-strong hover:text-white/90"
               >
@@ -560,12 +576,14 @@ export function TemplatesView({
             <h2 className="text-sm font-medium text-white/50">Skills</h2>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => { setGeneratingSkill(!generatingSkill); setCreatingSkill(false) }}
                 className="rounded-lg border border-st-thinking/30 bg-st-thinking/[0.08] px-3 py-1.5 text-xs font-medium text-st-thinking transition-colors hover:bg-st-thinking/[0.15]"
               >
                 Generar con IA
               </button>
               <button
+                type="button"
                 onClick={() => { setCreatingSkill(!creatingSkill); setGeneratingSkill(false) }}
                 className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-white/65 transition-colors hover:border-line-strong hover:text-white/90"
               >

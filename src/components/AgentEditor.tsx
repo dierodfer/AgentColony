@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
@@ -139,6 +139,11 @@ export function AgentEditor({
   onCreateTemplate,
 }: Readonly<Props>) {
   const [draft, setDraft] = useState<AgentDraft>(initial)
+  // Ids para asociar cada rótulo con su control o su grupo de chips (a11y).
+  const modelId = useId()
+  const cliGroupId = useId()
+  const templatesGroupId = useId()
+  const skillsGroupId = useId()
   const nameTaken = takenNames.includes(draft.name.trim().toLowerCase())
   /** Modelos del CLI actualmente seleccionado. */
   const models = modelsByCli[draft.cli] ?? []
@@ -289,7 +294,7 @@ export function AgentEditor({
 
         {/* Agente (CLI): chips con el logo oficial de cada uno */}
         <div className="mb-2 flex items-center justify-between">
-          <label className={labelCls.replace('mb-1.5 ', '')}>Agente (CLI)</label>
+          <span id={cliGroupId} className={labelCls.replace('mb-1.5 ', '')}>Agente (CLI)</span>
           <button
             type="button"
             onClick={checkAllClis}
@@ -303,7 +308,7 @@ export function AgentEditor({
             {checkingClis ? 'Comprobando…' : 'Comprobar'}
           </button>
         </div>
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div role="group" aria-labelledby={cliGroupId} className="mb-4 flex flex-wrap gap-2">
           {CLIS.map((c) => {
             const check = availability?.[c.id]
             const unavailable = check !== undefined && !check.available
@@ -345,7 +350,7 @@ export function AgentEditor({
 
         {/* Modelo */}
         <div className="mb-1.5 flex items-center justify-between">
-          <label className={labelCls.replace('mb-1.5 ', '')}>Modelo</label>
+          <label htmlFor={modelId} className={labelCls.replace('mb-1.5 ', '')}>Modelo</label>
           <button
             type="button"
             onClick={reloadModels}
@@ -360,6 +365,7 @@ export function AgentEditor({
           </button>
         </div>
         <select
+          id={modelId}
           value={draft.model}
           onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}
           disabled={models.length === 0}
@@ -385,7 +391,7 @@ export function AgentEditor({
 
         {/* Agentes Plantilla */}
         <div className="mb-2 flex items-center justify-between">
-          <label className={labelCls + ' mb-0'}>Agentes Plantilla</label>
+          <span id={templatesGroupId} className={labelCls + ' mb-0'}>Agentes Plantilla</span>
           <button
             type="button"
             onClick={() => setNewTemplate({ name: '', body: '' })}
@@ -394,7 +400,7 @@ export function AgentEditor({
             + Nuevo
           </button>
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div role="group" aria-labelledby={templatesGroupId} className="mb-3 flex flex-wrap gap-2">
           {templates.length === 0 && <span className="text-sm text-white/35">No hay agentes plantilla disponibles.</span>}
           {templates.map((t) => {
             const on = draft.agentFile === t.file
@@ -442,7 +448,7 @@ export function AgentEditor({
 
         {/* Skills */}
         <div className="mb-2 flex items-center justify-between">
-          <label className={labelCls + ' mb-0'}>Skills</label>
+          <span id={skillsGroupId} className={labelCls + ' mb-0'}>Skills</span>
           <button
             type="button"
             onClick={() => setNewSkill({ name: '', body: '', applyTo: '' })}
@@ -451,7 +457,7 @@ export function AgentEditor({
             + Nueva
           </button>
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div role="group" aria-labelledby={skillsGroupId} className="mb-3 flex flex-wrap gap-2">
           {skills.length === 0 && <span className="text-sm text-white/35">No hay skills detectadas.</span>}
           {skills.map((s) => {
             const on = draft.skills.includes(s.id)

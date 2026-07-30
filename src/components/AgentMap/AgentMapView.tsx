@@ -199,10 +199,21 @@ export function AgentMapView({
       <div
         ref={containerRef}
         onMouseMove={onMouseMove}
-        onClick={() => linkingFrom && setLinkingFrom(null)}
         className="relative flex-1 overflow-hidden"
       >
         <MapBackground />
+
+        {/* Capa de cancelación del modo enlace: clic fuera de un robot lo cierra.
+            Es un <button> real para que también funcione con teclado (además del
+            atajo Esc), en vez de colgar un onClick del contenedor del mapa. */}
+        {linkingFrom && (
+          <button
+            type="button"
+            aria-label="Cancelar el modo enlace"
+            onClick={() => setLinkingFrom(null)}
+            className="absolute inset-0 z-0 cursor-default"
+          />
+        )}
 
         {/* Capa de hilos de memoria entre agentes enlazados. */}
         {size.width > 0 && memoryLinks.length > 0 && (

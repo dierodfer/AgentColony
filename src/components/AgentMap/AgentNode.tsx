@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { motion } from 'framer-motion'
 import { AgentRobot } from '../AgentIdentity'
 import { CliBadge } from '../CliBadge'
@@ -34,6 +34,39 @@ function LinkIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  )
+}
+
+/**
+ * Envoltorio del robot. En modo enlace es un objetivo seleccionable, así que se
+ * renderiza como `<button>` real (accesible por teclado); fuera de ese modo no
+ * tiene interacción propia y es un simple contenedor.
+ */
+function RobotArea({
+  linkingActive,
+  agentName,
+  onLinkTarget,
+  children,
+}: Readonly<{
+  linkingActive: boolean
+  agentName: string
+  onLinkTarget: () => void
+  children: ReactNode
+}>) {
+  const className = 'relative flex items-center justify-center'
+  if (!linkingActive) return <div className={className}>{children}</div>
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={`Enlazar memoria con ${agentName}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        onLinkTarget()
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -109,13 +142,10 @@ export function AgentNode({
           willChange: 'transform',
         }}
       >
-        <div
-          className="relative flex items-center justify-center"
-          onClick={(e) => {
-            if (!linkingActive) return
-            e.stopPropagation()
-            onLinkTarget()
-          }}
+        <RobotArea
+          linkingActive={linkingActive}
+          agentName={agent.name}
+          onLinkTarget={onLinkTarget}
         >
           <div
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
@@ -156,7 +186,7 @@ export function AgentNode({
               <LinkIcon />
             </button>
           )}
-        </div>
+        </RobotArea>
         <button
           type="button"
           onClick={(e) => {

@@ -17,6 +17,101 @@ const BUBBLE_WIDTH = 240
 const BUBBLE_HEIGHT = 150
 const NODE_GAP = 46
 
+/** Estados en los que el agente ya terminó (el bocadillo se puede minimizar). */
+function isDone(status: AgentStatus): boolean {
+  return status === 'finished' || status === 'error'
+}
+
+/** Esquina del bocadillo: pegado al nodo por `side` y recortado contra el contenedor. */
+function bubblePosition(
+  anchor: NodePos,
+  side: 'left' | 'right',
+  bounds: { width: number; height: number },
+): { left: number; top: number } {
+  const left =
+    side === 'right'
+      ? Math.min(anchor.x + NODE_GAP, bounds.width - BUBBLE_WIDTH - 8)
+      : Math.max(anchor.x - NODE_GAP - BUBBLE_WIDTH, 8)
+  const top = Math.min(Math.max(anchor.y - BUBBLE_HEIGHT / 2, 8), Math.max(bounds.height - BUBBLE_HEIGHT - 8, 8))
+  return { left, top }
+}
+
+/** Tarjeta del bocadillo: cabecera, puntos de "escribiendo" y texto con scroll. */
+function BubbleCard({
+  name,
+  accent,
+  side,
+  status,
+  display,
+  isWorking,
+  onCollapse,
+}: Readonly<{
+  name: string
+  accent: string
+  side: 'left' | 'right'
+  status: AgentStatus
+  display: string
+  isWorking: boolean
+  /** null mientras el agente trabaja: aún no se puede minimizar. */
+  onCollapse: (() => void) | null
+}>) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Sigue el texto según llega en streaming.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [display])
+
+  const border = `color-mix(in srgb, ${accent} 30%, var(--color-line))`
+  const background = 'color-mix(in srgb, var(--color-surface) 92%, transparent)'
+
+  return (
+    <div
+      className="relative rounded-2xl border p-3 shadow-lg backdrop-blur-sm"
+      style={{ width: BUBBLE_WIDTH, borderColor: border, backgroundColor: background }}
+    >
+      <div
+        className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rotate-45 border"
+        style={{
+          [side === 'right' ? 'left' : 'right']: -5,
+          borderColor: border,
+          backgroundColor: background,
+        }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">{name}</p>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="text-[11px] text-white/30 hover:text-white/60"
+            aria-label="Minimizar"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {isWorking && !display ? (
+        <span className="mt-1 inline-flex items-center gap-1 py-1">
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-white/40" />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-white/40" />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-white/40" />
+        </span>
+      ) : (
+        <div ref={scrollRef} className="scroll-thin mt-1 max-h-24 overflow-y-auto">
+          <p
+            className="whitespace-pre-line text-[12.5px] leading-relaxed"
+            style={{ color: status === 'error' ? 'var(--color-st-error)' : 'rgba(255,255,255,0.82)' }}
+          >
+            {display}
+            {status === 'responding' && <span className="stream-caret ml-0.5 text-accent">▍</span>}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
  * Bocadillo de diálogo anclado a un nodo. Se muestra mientras el agente
  * trabaja o tiene respuesta, y permanece estático (no se auto-colapsa):
@@ -45,24 +140,16 @@ export function AgentBubble({
   const visible = status !== 'idle' && (isWorking || !!display)
 
   const [collapsed, setCollapsed] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Al arrancar una ronda nueva, el bocadillo vuelve a mostrarse expandido.
   useEffect(() => {
-    if (status !== 'finished' && status !== 'error') setCollapsed(false)
+    if (!isDone(status)) setCollapsed(false)
   }, [status])
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [display])
 
   if (!visible) return null
 
   const color = STATUS_COLOR[status]
-  const left =
-    side === 'right'
-      ? Math.min(anchor.x + NODE_GAP, bounds.width - BUBBLE_WIDTH - 8)
-      : Math.max(anchor.x - NODE_GAP - BUBBLE_WIDTH, 8)
-  const top = Math.min(Math.max(anchor.y - BUBBLE_HEIGHT / 2, 8), Math.max(bounds.height - BUBBLE_HEIGHT - 8, 8))
+  const { left, top } = bubblePosition(anchor, side, bounds)
 
   return (
     <AnimatePresence>
@@ -98,53 +185,15 @@ export function AgentBubble({
           className="absolute z-30"
           style={{ left, top }}
         >
-          <div
-            className="relative rounded-2xl border p-3 shadow-lg backdrop-blur-sm"
-            style={{
-              width: BUBBLE_WIDTH,
-              borderColor: `color-mix(in srgb, ${accent} 30%, var(--color-line))`,
-              backgroundColor: 'color-mix(in srgb, var(--color-surface) 92%, transparent)',
-            }}
-          >
-            <div
-              className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rotate-45 border"
-              style={{
-                [side === 'right' ? 'left' : 'right']: -5,
-                borderColor: `color-mix(in srgb, ${accent} 30%, var(--color-line))`,
-                backgroundColor: 'color-mix(in srgb, var(--color-surface) 92%, transparent)',
-              }}
-            />
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">{name}</p>
-              {(status === 'finished' || status === 'error') && (
-                <button
-                  type="button"
-                  onClick={() => setCollapsed(true)}
-                  className="text-[11px] text-white/30 hover:text-white/60"
-                  aria-label="Minimizar"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-            {isWorking && !display ? (
-              <span className="mt-1 inline-flex items-center gap-1 py-1">
-                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-white/40" />
-                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-white/40" />
-                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-white/40" />
-              </span>
-            ) : (
-              <div ref={scrollRef} className="scroll-thin mt-1 max-h-24 overflow-y-auto">
-                <p
-                  className="whitespace-pre-line text-[12.5px] leading-relaxed"
-                  style={{ color: status === 'error' ? 'var(--color-st-error)' : 'rgba(255,255,255,0.82)' }}
-                >
-                  {display}
-                  {status === 'responding' && <span className="stream-caret ml-0.5 text-accent">▍</span>}
-                </p>
-              </div>
-            )}
-          </div>
+          <BubbleCard
+            name={name}
+            accent={accent}
+            side={side}
+            status={status}
+            display={display}
+            isWorking={isWorking}
+            onCollapse={isDone(status) ? () => setCollapsed(true) : null}
+          />
         </motion.div>
       )}
     </AnimatePresence>

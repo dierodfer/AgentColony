@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
 import { CliLogo } from './CliLogo'
-import { CLIS } from '../lib/clis'
+import { CLIS, type CliDescriptor } from '../lib/clis'
 import { randomItem } from '../lib/random'
 import { api, type CliAvailability } from '../api'
 import type { ModelsByCli } from '../hooks/useOfficeData'
@@ -53,6 +53,58 @@ function ReloadIcon() {
 const labelCls = 'mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-white/40'
 const fieldCls =
   'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-white/85 outline-none transition-colors placeholder:text-white/25 focus:border-accent/50'
+
+/** Tooltip del chip de un CLI según lo que sepamos de su disponibilidad. */
+function cliChipTitle(label: string, check: CliAvailability | undefined): string {
+  if (!check) return label
+  if (check.available) {
+    const version = check.version ? ` (${check.version})` : ''
+    return `${label} · disponible${version}`
+  }
+  const reason = check.error ? ` — ${check.error}` : ''
+  return `${label} · no instalado${reason}`
+}
+
+/** Chip de selección de CLI: logo oficial, color de marca y estado de instalación. */
+function CliChip({
+  cli,
+  selected,
+  check,
+  onSelect,
+}: Readonly<{
+  cli: CliDescriptor
+  selected: boolean
+  /** Disponibilidad conocida; undefined mientras no se haya comprobado. */
+  check: CliAvailability | undefined
+  onSelect: (cli: AgentCli) => void
+}>) {
+  const unavailable = check !== undefined && !check.available
+
+  let stateCls: string
+  if (unavailable) stateCls = 'cursor-not-allowed border-line text-white/30 line-through opacity-50'
+  else if (selected) stateCls = 'text-white'
+  else stateCls = 'border-line bg-surface text-white/60 hover:border-line-strong hover:text-white/85'
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(cli.id)}
+      disabled={unavailable}
+      title={cliChipTitle(cli.label, check)}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${stateCls}`}
+      style={
+        selected && !unavailable
+          ? { borderColor: cli.color, backgroundColor: `color-mix(in srgb, ${cli.color} 16%, transparent)` }
+          : undefined
+      }
+    >
+      <span style={{ color: unavailable ? undefined : cli.color }}>
+        <CliLogo cli={cli.id} size={15} />
+      </span>
+      {cli.label}
+    </button>
+  )
+}
 
 function AvatarPicker({
   value,
@@ -309,43 +361,15 @@ export function AgentEditor({
           </button>
         </div>
         <div role="group" aria-labelledby={cliGroupId} className="mb-4 flex flex-wrap gap-2">
-          {CLIS.map((c) => {
-            const check = availability?.[c.id]
-            const unavailable = check !== undefined && !check.available
-            const on = draft.cli === c.id
-            const title = check === undefined
-              ? c.label
-              : check.available
-                ? `${c.label} · disponible${check.version ? ` (${check.version})` : ''}`
-                : `${c.label} · no instalado${check.error ? ` — ${check.error}` : ''}`
-            return (
-              <button
-                type="button"
-                key={c.id}
-                onClick={() => selectCli(c.id)}
-                disabled={unavailable}
-                title={title}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  unavailable
-                    ? 'cursor-not-allowed border-line text-white/30 line-through opacity-50'
-                    : on
-                      ? 'text-white'
-                      : 'border-line bg-surface text-white/60 hover:border-line-strong hover:text-white/85'
-                }`}
-                style={on && !unavailable
-                  ? {
-                      borderColor: c.color,
-                      backgroundColor: `color-mix(in srgb, ${c.color} 16%, transparent)`,
-                    }
-                  : undefined}
-              >
-                <span style={{ color: unavailable ? undefined : c.color }}>
-                  <CliLogo cli={c.id} size={15} />
-                </span>
-                {c.label}
-              </button>
-            )
-          })}
+          {CLIS.map((c) => (
+            <CliChip
+              key={c.id}
+              cli={c}
+              selected={draft.cli === c.id}
+              check={availability?.[c.id]}
+              onSelect={selectCli}
+            />
+          ))}
         </div>
 
         {/* Modelo */}

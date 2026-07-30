@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import type { AgentTemplate, SkillInfo, AgentConfig, MemoryLink } from './types.ts'
+import { parseFrontmatter as parseYamlFrontmatter, type Frontmatter } from './frontmatter.ts'
 
 // La app se ejecuta desde la raíz del proyecto (el plugin de Vite corre en ese
 // cwd), donde viven .agents/ (plantillas) y .skills/.
@@ -14,16 +15,8 @@ const TEAM_DIR = join(ROOT, '.tmp')
 const TEAM_FILE = join(TEAM_DIR, 'agent.config.json')
 
 /** Separa el frontmatter YAML simple (key: value) del cuerpo markdown. */
-function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
-  const meta: Record<string, string> = {}
-  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
-  if (!match) return { meta, body: raw.trim() }
-
-  for (const line of match[1].split('\n')) {
-    const kv = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (kv) meta[kv[1].trim()] = kv[2].trim().replace(/^["']|["']$/g, '')
-  }
-  return { meta, body: match[2].trim() }
+function parseFrontmatter(raw: string): Frontmatter {
+  return parseYamlFrontmatter(raw) ?? { meta: {}, body: raw.trim() }
 }
 
 /** Capitaliza un id para usarlo como nombre por defecto. */
@@ -155,14 +148,17 @@ function slugify(name: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // quita acentos (combining marks)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    // Dos reemplazos anclados en vez de `/^-+|-+$/g`: evita el backtracking
+    // del patrón alternado al recorrer la cadena completa.
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
     .slice(0, 40)
 }
 
 /** Escapa comillas dobles para incrustar un valor en el frontmatter. */
 function yamlValue(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`
+  return `"${value.replaceAll('"', String.raw`\"`)}"`
 }
 
 /** Construye el frontmatter YAML de una skill, incluyendo `applyTo` si se indica. */

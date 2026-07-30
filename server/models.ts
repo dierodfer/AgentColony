@@ -40,11 +40,14 @@ function labelFor(id: string): string {
  * testear el parseo sin ejecutar el CLI.
  */
 export function parseModelsFromOutput(raw: string): ModelOption[] {
-  const match = raw.match(/\[[\s\S]*\]/)
-  if (!match) return []
+  // Recorte por índices en vez de un `/\[[\s\S]*\]/`: mismo resultado (del
+  // primer `[` al último `]`) sin backtracking sobre toda la salida del CLI.
+  const start = raw.indexOf('[')
+  const end = raw.lastIndexOf(']')
+  if (start === -1 || end < start) return []
   let ids: unknown
   try {
-    ids = JSON.parse(match[0])
+    ids = JSON.parse(raw.slice(start, end + 1))
   } catch {
     return []
   }

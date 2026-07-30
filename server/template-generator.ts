@@ -1,6 +1,7 @@
 import { runOnce, pickAvailableCli } from './cli-adapters.ts'
 import { createTemplate, createSkill } from './config-reader.ts'
 import type { AgentTemplate, SkillInfo } from './types.ts'
+import { parseFrontmatter as parseYamlFrontmatter } from './frontmatter.ts'
 
 /**
  * Genera texto con IA usando el primer CLI disponible (vía la capa de
@@ -130,16 +131,11 @@ Return ONLY the .md content (frontmatter + body). No explanations, no wrapping c
 User request: {PROMPT}`
 
 function parseFrontmatter(raw: string): { name: string; body: string } | null {
-  const cleaned = raw.replace(/^```[\w]*\n?/, '').replace(/\n?```\s*$/, '').trim()
-  const match = cleaned.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
-  if (!match) return null
-  const meta: Record<string, string> = {}
-  for (const line of match[1].split('\n')) {
-    const kv = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (kv) meta[kv[1].trim()] = kv[2].trim().replace(/^["']|["']$/g, '')
-  }
-  if (!meta.name) return null
-  return { name: meta.name, body: match[2].trim() }
+  const cleaned = raw.replace(/^```\w*\n?/, '').replace(/\n?```[^\S\n]*$/, '').trim()
+  const parsed = parseYamlFrontmatter(cleaned)
+  const name = parsed?.meta.name
+  if (!name) return null
+  return { name, body: parsed.body }
 }
 
 export async function generateAgentTemplate(

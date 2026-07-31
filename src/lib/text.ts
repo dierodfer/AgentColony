@@ -5,8 +5,8 @@
 const H_SPACE = String.raw`[^\S\r\n]`
 
 const BOLD_OR_CODE = /\*\*|__|`/g
-const HEADING = new RegExp(String.raw`^#{1,6}${H_SPACE}+`, 'gm')
-const BULLET = new RegExp(String.raw`^${H_SPACE}*[-*]${H_SPACE}+`, 'gm')
+const HEADING = new RegExp(`^#{1,6}${H_SPACE}+`, 'gm')
+const BULLET = new RegExp(`^${H_SPACE}*[-*]${H_SPACE}+`, 'gm')
 const RUN_OF_SPACES = /[ \t]{2,}/g
 const BLANK_LINES = /\n{3,}/g
 

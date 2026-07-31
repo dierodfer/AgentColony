@@ -14,6 +14,11 @@ function dotColor(available: boolean): string {
   return available ? 'var(--color-st-finished)' : 'var(--color-st-error)'
 }
 
+/** Texto de disponibilidad que acompaña al nombre del CLI en el tooltip. */
+function availabilityText(available: boolean): string {
+  return available ? 'disponible' : 'no disponible'
+}
+
 export function CliBadge({
   cli,
   size = 20,
@@ -27,7 +32,7 @@ export function CliBadge({
   const meta = cliInfo(cli)
   const known = available !== undefined
   const dot = known ? dotColor(available) : null
-  const title = known ? `${meta.label} · ${available ? 'disponible' : 'no disponible'}` : meta.label
+  const title = known ? `${meta.label} · ${availabilityText(available)}` : meta.label
 
   return (
     <span

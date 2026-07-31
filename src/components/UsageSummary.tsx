@@ -80,18 +80,18 @@ function Stat({
 function Modal({ title, onClose, children }: Readonly<{ title: string; onClose: () => void; children: React.ReactNode }>) {
   return (
     <ModalBackdrop onClose={onClose} label={title}>
-      <div
-        role="dialog"
+      <dialog
+        open
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-md rounded-2xl border border-line-strong bg-elevated p-5 shadow-2xl shadow-black/50"
+        className="relative m-0 w-full max-w-md rounded-2xl border border-line-strong bg-elevated p-5 text-inherit shadow-2xl shadow-black/50"
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white/90">{title}</h3>
           <button type="button" onClick={onClose} className="text-lg leading-none text-white/40 transition-colors hover:text-white/80">×</button>
         </div>
         {children}
-      </div>
+      </dialog>
     </ModalBackdrop>
   )
 }

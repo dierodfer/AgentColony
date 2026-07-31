@@ -44,15 +44,15 @@ export function SynthesisPanel({
       <AnimatePresence>
         {open && (
           <ModalBackdrop onClose={reset} label="la síntesis del equipo">
-            <motion.div
-              role="dialog"
+            <motion.dialog
+              open
               aria-modal="true"
               aria-label="Síntesis del equipo"
               initial={{ opacity: 0, scale: 0.97, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 10 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="relative w-full max-w-lg rounded-2xl border border-line-strong bg-elevated p-6 shadow-2xl shadow-black/50"
+              className="relative m-0 w-full max-w-lg rounded-2xl border border-line-strong bg-elevated p-6 text-inherit shadow-2xl shadow-black/50"
             >
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-white/90">
@@ -83,7 +83,7 @@ export function SynthesisPanel({
               {text && (
                 <p className="whitespace-pre-line text-[15px] leading-relaxed text-white/85">{text}</p>
               )}
-            </motion.div>
+            </motion.dialog>
           </ModalBackdrop>
         )}
       </AnimatePresence>

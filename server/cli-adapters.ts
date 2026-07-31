@@ -81,9 +81,11 @@ function parseJson(text: string): unknown {
  * del bucle que cuenta llaves.
  */
 function endOfJsonString(raw: string, start: number): number {
-  for (let i = start + 1; i < raw.length; i++) {
-    if (raw[i] === '\\') i++
+  let i = start + 1
+  while (i < raw.length) {
+    if (raw[i] === '\\') i += 2
     else if (raw[i] === '"') return i + 1
+    else i++
   }
   return raw.length
 }
@@ -94,16 +96,19 @@ export function firstJsonObject(raw: string): unknown {
   if (start === -1) return null
 
   let depth = 0
-  for (let i = start; i < raw.length; i++) {
+  let i = start
+  while (i < raw.length) {
     const ch = raw[i]
     if (ch === '"') {
-      i = endOfJsonString(raw, i) - 1
-    } else if (ch === '{') {
-      depth++
-    } else if (ch === '}') {
+      i = endOfJsonString(raw, i)
+      continue
+    }
+    if (ch === '{') depth++
+    else if (ch === '}') {
       depth--
       if (depth === 0) return parseJson(raw.slice(start, i + 1))
     }
+    i++
   }
   return null
 }

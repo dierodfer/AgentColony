@@ -142,23 +142,31 @@ export function writeMemoryLinks(links: MemoryLink[]): void {
 
 // ---- Creación de skills y plantillas desde la app ----
 
+/** Recorta los guiones de los extremos recorriendo la cadena, sin regex. */
+function trimDashes(text: string): string {
+  let start = 0
+  let end = text.length
+  while (start < end && text[start] === '-') start++
+  while (end > start && text[end - 1] === '-') end--
+  return text.slice(start, end)
+}
+
 /** Convierte un nombre en un slug seguro para nombre de archivo. */
 function slugify(name: string): string {
-  return name
+  const collapsed = name
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // quita acentos (combining marks)
     .replaceAll(/[^a-z0-9]+/g, '-')
-    // Dos reemplazos anclados en vez de `/^-+|-+$/g`: evita el backtracking
-    // del patrón alternado al recorrer la cadena completa.
-    .replace(/^-+/, '')
-    .replace(/-+$/, '')
-    .slice(0, 40)
+  return trimDashes(collapsed).slice(0, 40)
 }
+
+/** Comilla doble escapada para YAML (`\"`), fuera del template para no anidarlos. */
+const ESCAPED_QUOTE = String.raw`\"`
 
 /** Escapa comillas dobles para incrustar un valor en el frontmatter. */
 function yamlValue(value: string): string {
-  return `"${value.replaceAll('"', String.raw`\"`)}"`
+  return `"${value.replaceAll('"', ESCAPED_QUOTE)}"`
 }
 
 /** Construye el frontmatter YAML de una skill, incluyendo `applyTo` si se indica. */

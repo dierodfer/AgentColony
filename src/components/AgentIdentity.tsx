@@ -302,7 +302,7 @@ export function AgentRobot({
   const expr = expressionOf(click.showHearts, eyeGroup)
   const eyeColor = expr === 'x' ? '#FFB4B4' : eye
   const ear = shade(color, -0.14)
-  /** Estado que anima el SVG: 'rest' congela todo si se pide menos movimiento. */
+  /** Estado que anima el SVG: 'rest' deja el robot quieto si se pide menos movimiento. */
   const motionState = reduce ? 'rest' : group
   const scanning = group === 'working' && !reduce
 

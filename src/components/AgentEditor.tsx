@@ -358,7 +358,7 @@ export function AgentEditor({
             {checkingClis ? 'Comprobando…' : 'Comprobar'}
           </button>
         </div>
-        <div role="group" aria-labelledby={cliGroupId} className="mb-4 flex flex-wrap gap-2">
+        <fieldset aria-labelledby={cliGroupId} className="m-0 mb-4 flex min-w-0 flex-wrap gap-2 border-0 p-0">
           {CLIS.map((c) => (
             <CliChip
               key={c.id}
@@ -368,7 +368,7 @@ export function AgentEditor({
               onSelect={selectCli}
             />
           ))}
-        </div>
+        </fieldset>
 
         {/* Modelo */}
         <div className="mb-1.5 flex items-center justify-between">
@@ -422,7 +422,7 @@ export function AgentEditor({
             + Nuevo
           </button>
         </div>
-        <div role="group" aria-labelledby={templatesGroupId} className="mb-3 flex flex-wrap gap-2">
+        <fieldset aria-labelledby={templatesGroupId} className="m-0 mb-3 flex min-w-0 flex-wrap gap-2 border-0 p-0">
           {templates.length === 0 && <span className="text-sm text-white/35">No hay agentes plantilla disponibles.</span>}
           {templates.map((t) => {
             const on = draft.agentFile === t.file
@@ -441,7 +441,7 @@ export function AgentEditor({
               </button>
             )
           })}
-        </div>
+        </fieldset>
 
         {newTemplate && (
           <InlineCreate
@@ -479,7 +479,7 @@ export function AgentEditor({
             + Nueva
           </button>
         </div>
-        <div role="group" aria-labelledby={skillsGroupId} className="mb-3 flex flex-wrap gap-2">
+        <fieldset aria-labelledby={skillsGroupId} className="m-0 mb-3 flex min-w-0 flex-wrap gap-2 border-0 p-0">
           {skills.length === 0 && <span className="text-sm text-white/35">No hay skills detectadas.</span>}
           {skills.map((s) => {
             const on = draft.skills.includes(s.id)
@@ -499,7 +499,7 @@ export function AgentEditor({
               </button>
             )
           })}
-        </div>
+        </fieldset>
 
         {newSkill && (
           <InlineCreate

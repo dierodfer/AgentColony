@@ -40,11 +40,14 @@ function labelFor(id: string): string {
  * testear el parseo sin ejecutar el CLI.
  */
 export function parseModelsFromOutput(raw: string): ModelOption[] {
-  const match = raw.match(/\[[\s\S]*\]/)
-  if (!match) return []
+  // Recorte por índices en vez de un `/\[[\s\S]*\]/`: mismo resultado (del
+  // primer `[` al último `]`) sin backtracking sobre toda la salida del CLI.
+  const start = raw.indexOf('[')
+  const end = raw.lastIndexOf(']')
+  if (start === -1 || end < start) return []
   let ids: unknown
   try {
-    ids = JSON.parse(match[0])
+    ids = JSON.parse(raw.slice(start, end + 1))
   } catch {
     return []
   }
@@ -53,7 +56,8 @@ export function parseModelsFromOutput(raw: string): ModelOption[] {
     .filter((id): id is string => typeof id === 'string' && id.trim() !== '')
     .map((id) => ({ id, label: labelFor(id) }))
   // Si el CLI ofrece "auto", lo mostramos primero (opción recomendada).
-  models.sort((a, b) => (a.id === 'auto' ? -1 : b.id === 'auto' ? 1 : 0))
+  const autoFirst = (id: string) => (id === 'auto' ? 0 : 1)
+  models.sort((a, b) => autoFirst(a.id) - autoFirst(b.id))
   return models
 }
 

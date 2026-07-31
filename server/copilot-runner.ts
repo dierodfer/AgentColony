@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { getAgentTemplateBody, getSkillBody, getSkills } from './config-reader.ts'
 import { getAdapter, type LineHandlers } from './cli-adapters.ts'
-import { getPolicy, getSandboxCwd } from './cli-policy.ts'
+import { getPolicy, getSandboxCwd, spawnEnv } from './cli-policy.ts'
 import type { AgentConfig, MemoryLink, ServerMessage } from './types.ts'
 
 const MAX_PARALLEL = 8
@@ -47,12 +47,13 @@ function buildPrompt(agent: AgentConfig, userPrompt: string, shared?: SharedCont
 
   if (shared && shared.partners.length > 0) {
     const mem = shared.partners.map((p) => `${p.name}: ${p.text}`).join('\n\n')
+    // Limitación conocida: solo se comparte el texto de la ronda anterior; los
+    // MCPs de los agentes enlazados no se propagan.
     parts.push(
       '## Memoria compartida del equipo\n' +
         'Compañeros con los que compartes memoria respondieron en la ronda ' +
         `anterior:\n\n${mem}\n\nTenlo en cuenta al elaborar tu respuesta.`,
     )
-    // TODO: compartir también los MCPs de los agentes enlazados (pendiente).
   }
 
   parts.push(
@@ -60,8 +61,8 @@ function buildPrompt(agent: AgentConfig, userPrompt: string, shared?: SharedCont
       'texto plano y conversacional. No uses listas, ni numeración, ni markdown ' +
       '(nada de **, #, viñetas). Sin preámbulos ni saludos. No explores archivos ' +
       'ni ejecutes herramientas; responde solo con tu opinión experta.',
+    `Pregunta:\n${userPrompt}`,
   )
-  parts.push(`Pregunta:\n${userPrompt}`)
 
   return parts.join('\n\n')
 }
@@ -124,7 +125,7 @@ interface AgentProcess {
  * permite cancelar. Solo una ronda activa a la vez.
  */
 export class OfficeRunner {
-  private running = new Map<string, AgentProcess>()
+  private readonly running = new Map<string, AgentProcess>()
 
   get isRunning(): boolean {
     return this.running.size > 0
@@ -189,7 +190,7 @@ export class OfficeRunner {
       try {
         child = spawn(adapter.bin, args, {
           cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
-          env: { ...process.env, ...policy.env },
+          env: spawnEnv(policy),
         })
       } catch (err) {
         send({
@@ -324,6 +325,6 @@ export class OfficeRunner {
   /** Intenta extraer un mensaje de error legible de stderr. */
   private extractError(stderr: string): string {
     const errLine = stderr.split('\n').find((l) => /error/i.test(l))
-    return errLine?.trim() || stderr.trim().split('\n').slice(-1)[0]?.trim() || ''
+    return errLine?.trim() || stderr.trim().split('\n').at(-1)?.trim() || ''
   }
 }

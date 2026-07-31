@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { getPolicy, getSandboxCwd } from './cli-policy.ts'
+import { getPolicy, getSandboxCwd, spawnEnv } from './cli-policy.ts'
 import type { AgentCli } from './types.ts'
 
 /**
@@ -66,38 +66,99 @@ function stripAnsi(s: string): string {
   return s.replace(/\[[0-9;]*m/g, '')
 }
 
+/** `JSON.parse` que devuelve null en vez de lanzar. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Índice justo después de la cadena JSON que abre en `raw[start]` (una comilla).
+ * Saltarse las cadenas de una pasada evita llevar el estado `inStr`/`esc` dentro
+ * del bucle que cuenta llaves.
+ */
+function endOfJsonString(raw: string, start: number): number {
+  let i = start + 1
+  while (i < raw.length) {
+    if (raw[i] === '\\') i += 2
+    else if (raw[i] === '"') return i + 1
+    else i++
+  }
+  return raw.length
+}
+
 /** Extrae el primer objeto JSON balanceado de un texto (o null). Exportada para test. */
 export function firstJsonObject(raw: string): unknown {
   const start = raw.indexOf('{')
   if (start === -1) return null
+
   let depth = 0
-  let inStr = false
-  let esc = false
-  for (let i = start; i < raw.length; i++) {
+  let i = start
+  while (i < raw.length) {
     const ch = raw[i]
-    if (inStr) {
-      if (esc) esc = false
-      else if (ch === '\\') esc = true
-      else if (ch === '"') inStr = false
+    if (ch === '"') {
+      i = endOfJsonString(raw, i)
       continue
     }
-    if (ch === '"') inStr = true
-    else if (ch === '{') depth++
+    if (ch === '{') depth++
     else if (ch === '}') {
       depth--
-      if (depth === 0) {
-        try {
-          return JSON.parse(raw.slice(start, i + 1))
-        } catch {
-          return null
-        }
-      }
+      if (depth === 0) return parseJson(raw.slice(start, i + 1))
     }
+    i++
   }
   return null
 }
 
 // ---- Copilot (streaming JSONL) ----
+
+/** Evento JSONL de copilot. Esquema laxo: sólo se declara lo que se consume. */
+interface CopilotEvent {
+  type?: string
+  data?: CopilotEventData
+  usage?: { premiumRequests?: unknown }
+}
+
+interface CopilotEventData {
+  messageId?: string
+  phase?: string
+  deltaContent?: string
+  content?: unknown
+  outputTokens?: unknown
+  inputTokens?: unknown
+}
+
+/** ¿El mensaje es razonamiento? Su contenido no forma parte de la respuesta. */
+function isReasoning(data: CopilotEventData, state: AgentProcState): boolean {
+  return data.phase === 'reasoning' || (!!data.messageId && state.reasoningMessageIds.has(data.messageId))
+}
+
+/** Registra los mensajes de razonamiento; el resto abre la fase de respuesta. */
+function onCopilotMessageStart(data: CopilotEventData, state: AgentProcState, h: LineHandlers): void {
+  if (!data.messageId) return
+  if (data.phase === 'reasoning') state.reasoningMessageIds.add(data.messageId)
+  else h.setResponding(state.finalText)
+}
+
+/** Acumula el texto que llega token a token, salvo el de razonamiento. */
+function onCopilotMessageDelta(data: CopilotEventData, state: AgentProcState, h: LineHandlers): void {
+  if (!data.messageId || state.reasoningMessageIds.has(data.messageId)) return
+  state.finalText += data.deltaContent ?? ''
+  h.setResponding(state.finalText)
+}
+
+/** Mensaje completo: fija el texto (si no es razonamiento) y suma los tokens. */
+function onCopilotMessage(data: CopilotEventData, state: AgentProcState, h: LineHandlers): void {
+  if (typeof data.content === 'string' && !isReasoning(data, state)) {
+    state.finalText = data.content
+    h.setResponding(state.finalText)
+  }
+  if (typeof data.outputTokens === 'number') state.outputTokens += data.outputTokens
+  if (typeof data.inputTokens === 'number') state.inputTokens += data.inputTokens
+}
 
 const copilotAdapter: CliAdapter = {
   id: 'copilot',
@@ -121,57 +182,28 @@ const copilotAdapter: CliAdapter = {
       if (/^Error:/i.test(line)) h.fatal(line.replace(/^Error:\s*/i, ''))
       return
     }
-
-    let evt: any
-    try {
-      evt = JSON.parse(line)
-    } catch {
-      return
-    }
+    const evt = parseJson(line) as CopilotEvent | null
+    if (!evt) return
 
     // El razonamiento llega por eventos assistant.reasoning* / phase reasoning y
     // NO es la respuesta; la respuesta va por assistant.message*.
+    const data = evt.data ?? {}
     switch (evt.type) {
       case 'assistant.turn_start':
         h.setThinking()
         break
-
       case 'assistant.message_start':
-        if (evt.data?.messageId) {
-          if (evt.data?.phase === 'reasoning') {
-            state.reasoningMessageIds.add(evt.data.messageId)
-          } else {
-            h.setResponding(state.finalText)
-          }
-        }
+        onCopilotMessageStart(data, state, h)
         break
-
       case 'assistant.message_delta':
-        if (evt.data?.messageId && !state.reasoningMessageIds.has(evt.data.messageId)) {
-          state.finalText += evt.data.deltaContent ?? ''
-          h.setResponding(state.finalText)
-        }
+        onCopilotMessageDelta(data, state, h)
         break
-
       case 'assistant.message':
-        if (
-          typeof evt.data?.content === 'string' &&
-          evt.data?.phase !== 'reasoning' &&
-          !(evt.data?.messageId && state.reasoningMessageIds.has(evt.data.messageId))
-        ) {
-          state.finalText = evt.data.content
-          h.setResponding(state.finalText)
-        }
-        if (typeof evt.data?.outputTokens === 'number') state.outputTokens += evt.data.outputTokens
-        if (typeof evt.data?.inputTokens === 'number') state.inputTokens += evt.data.inputTokens
+        onCopilotMessage(data, state, h)
         break
-
-      case 'result': {
-        const aic = typeof evt.usage?.premiumRequests === 'number' ? evt.usage.premiumRequests : 0
-        h.addUsageAic(aic)
+      case 'result':
+        h.addUsageAic(typeof evt.usage?.premiumRequests === 'number' ? evt.usage.premiumRequests : 0)
         break
-      }
-
       default:
         break
     }
@@ -274,6 +306,7 @@ export function checkAvailability(cli: AgentCli): Promise<AvailabilityResult> {
       child = spawn(adapter.bin, adapter.versionArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
         cwd: getPolicy(cli).isolateCwd ? getSandboxCwd() : process.cwd(),
+        env: spawnEnv(getPolicy(cli)),
       })
     } catch (e) {
       resolve({ cli, available: false, error: (e as Error).message })
@@ -364,7 +397,7 @@ export function runOnce(
     try {
       child = spawn(adapter.bin, [...adapter.runArgs(prompt, model), ...policy.readOnlyArgs, ...extraArgs], {
         cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
-        env: { ...process.env, ...policy.env },
+        env: spawnEnv(policy),
       })
     } catch (e) {
       reject(new Error(`No se pudo iniciar ${adapter.bin}: ${(e as Error).message}`))
@@ -399,7 +432,7 @@ export function runOnce(
     child.on('close', (code) => {
       if (fatalErr) return finish(new Error(fatalErr))
       if (code === 0) finish(null, adapter.finalText(full, state).trim())
-      else finish(new Error(stderrOut.trim().split('\n').slice(-1)[0] || `${adapter.bin} salió con código ${code}`))
+      else finish(new Error(stderrOut.trim().split('\n').at(-1) || `${adapter.bin} salió con código ${code}`))
     })
 
     const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), timeoutMs)
@@ -430,7 +463,7 @@ export function listOpencodeModels(timeoutMs = 15_000): Promise<string[]> {
     try {
       child = spawn('opencode', ['models'], {
         cwd: policy.isolateCwd ? getSandboxCwd() : process.cwd(),
-        env: { ...process.env, ...policy.env },
+        env: spawnEnv(policy),
       })
     } catch (e) {
       reject(new Error(`No se pudo ejecutar opencode: ${(e as Error).message}`))
@@ -454,7 +487,7 @@ export function listOpencodeModels(timeoutMs = 15_000): Promise<string[]> {
     child.on('error', (e) => finish(new Error(`No se pudo ejecutar opencode: ${e.message}`)))
     child.on('close', (code) => {
       if (code === 0) finish(null, parseOpencodeModelLines(out))
-      else finish(new Error(stripAnsi(err || out).trim().split('\n').slice(-1)[0] || `opencode salió con código ${code}`))
+      else finish(new Error(stripAnsi(err || out).trim().split('\n').at(-1) || `opencode salió con código ${code}`))
     })
 
     const timer = setTimeout(() => finish(new Error('Tiempo de espera agotado.')), timeoutMs)

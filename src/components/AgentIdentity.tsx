@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import type { AgentStatus } from '../types'
+import { randomInt } from '../lib/random'
 
 // ---- Click animations (random) -----------------------------------------------
 
@@ -15,7 +16,7 @@ const CLICK_VARIANTS = {
 }
 
 function randomClickAnim(): ClickAnim {
-  return CLICK_ANIMS[Math.floor(Math.random() * CLICK_ANIMS.length)]
+  return CLICK_ANIMS[randomInt(CLICK_ANIMS.length)]
 }
 
 // Identidad visual de un agente: un robot-mascota animado (SVG paramétrico). El
@@ -66,7 +67,7 @@ export function accentOf(id: string): string {
 
 /** Aclara (amt > 0) u oscurece (amt < 0) un hex #RRGGBB. */
 function shade(hex: string, amt: number): string {
-  const n = parseInt(hex.slice(1), 16)
+  const n = Number.parseInt(hex.slice(1), 16)
   const t = amt < 0 ? 0 : 255
   const p = Math.abs(amt)
   const r = Math.round((t - ((n >> 16) & 255)) * p + ((n >> 16) & 255))
@@ -89,7 +90,7 @@ function groupOf(status: AgentStatus): Group {
 const EYE_X = [19, 29] // centros horizontales de los dos ojos
 const EYE_Y = 25
 
-function NeutralEyes({ shape, color }: { shape: EyeShape; color: string }) {
+function NeutralEyes({ shape, color }: Readonly<{ shape: EyeShape; color: string }>) {
   return (
     <>
       {EYE_X.map((cx) => {
@@ -117,7 +118,7 @@ function HeartEyes() {
   )
 }
 
-function HappyEyes({ color }: { color: string }) {
+function HappyEyes({ color }: Readonly<{ color: string }>) {
   return (
     <g stroke={color} strokeWidth={2.4} strokeLinecap="round" fill="none">
       <path d="M15.6 24 Q19 28.6 22.4 24" />
@@ -126,7 +127,7 @@ function HappyEyes({ color }: { color: string }) {
   )
 }
 
-function ErrorEyes({ color }: { color: string }) {
+function ErrorEyes({ color }: Readonly<{ color: string }>) {
   return (
     <g stroke={color} strokeWidth={2} strokeLinecap="round">
       {EYE_X.map((cx) => (
@@ -141,6 +142,137 @@ function ErrorEyes({ color }: { color: string }) {
 
 // ---- Robot ------------------------------------------------------------------
 
+type Expression = 'neutral' | 'hearts' | 'happy' | 'x'
+
+/** Expresión de los ojos: los corazones del clic mandan sobre el estado. */
+function expressionOf(showHearts: boolean, eyeGroup: Group): Expression {
+  if (showHearts) return 'hearts'
+  if (eyeGroup === 'done') return 'happy'
+  if (eyeGroup === 'fail') return 'x'
+  return 'neutral'
+}
+
+/** Ojos del robot; cada expresión entra y sale con su propia animación. */
+function RobotEyes({
+  expr,
+  shape,
+  color,
+  reduce,
+  scanning,
+  delay,
+}: Readonly<{
+  expr: Expression
+  shape: EyeShape
+  color: string
+  /** El usuario prefiere menos movimiento: sin parpadeo ni barrido. */
+  reduce: boolean
+  /** El agente está trabajando: los ojos barren de lado a lado. */
+  scanning: boolean
+  /** Desfase del parpadeo, para que no parpadeen todos a la vez. */
+  delay: number
+}>) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {expr === 'neutral' && (
+        <motion.g key="neutral" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+          <motion.g
+            animate={scanning ? { x: [0, -1.6, 1.6, 0] } : { x: 0 }}
+            transition={{ duration: 1.8, repeat: scanning ? Infinity : 0, ease: 'easeInOut' }}
+          >
+            <motion.g
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+              animate={reduce ? { scaleY: 1 } : { scaleY: [1, 1, 0.12, 1] }}
+              transition={{ duration: 4.2, times: [0, 0.93, 0.965, 1], repeat: reduce ? 0 : Infinity, delay, ease: 'easeInOut' }}
+            >
+              <NeutralEyes shape={shape} color={color} />
+            </motion.g>
+          </motion.g>
+        </motion.g>
+      )}
+      {expr === 'hearts' && (
+        <motion.g
+          key="hearts"
+          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+        >
+          <HeartEyes />
+        </motion.g>
+      )}
+      {expr === 'happy' && (
+        <motion.g
+          key="happy"
+          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+        >
+          <HappyEyes color={color} />
+        </motion.g>
+      )}
+      {expr === 'x' && (
+        <motion.g
+          key="x"
+          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ErrorEyes color={color} />
+        </motion.g>
+      )}
+    </AnimatePresence>
+  )
+}
+
+/**
+ * Estado de la animación aleatoria que dispara un clic en el robot: rebote,
+ * meneo o corazones. `count` sirve de `key` para poder repetir la animación.
+ */
+function useClickAnimation() {
+  const [anim, setAnim] = useState<ClickAnim | null>(null)
+  const [showHearts, setShowHearts] = useState(false)
+  const count = useRef(0)
+
+  const onClick = () => {
+    count.current += 1
+    const next = randomClickAnim()
+    if (next === 'hearts') {
+      setShowHearts(true)
+      setTimeout(() => setShowHearts(false), 1500)
+    } else {
+      setAnim(next)
+    }
+  }
+
+  return {
+    onClick,
+    showHearts,
+    count: count.current,
+    variant: anim ? CLICK_VARIANTS[anim] : null,
+    clear: () => setAnim(null),
+  }
+}
+
+/** Grupo de ojos mostrado: tras completar, vuelve a neutral a los 10 s. */
+function useEyeGroup(group: Group): Group {
+  const [eyeGroup, setEyeGroup] = useState<Group>(group)
+  useEffect(() => {
+    if (group !== 'done') {
+      setEyeGroup(group)
+      return
+    }
+    setEyeGroup('done')
+    const timer = setTimeout(() => setEyeGroup('idle'), 10000)
+    return () => clearTimeout(timer)
+  }, [group])
+  return eyeGroup
+}
+
 /**
  * Robot-mascota de un agente. Abstracto pero con carácter: nunca una persona.
  * `id` determina cuerpo/ojos; `status` determina expresión y animación.
@@ -149,53 +281,30 @@ export function AgentRobot({
   id,
   status = 'idle',
   size = 44,
-}: {
+}: Readonly<{
   id: string
   status?: AgentStatus
   size?: number
-}) {
+}>) {
   const { color, eye, eyes } = identityOf(id)
   const reduce = !!useReducedMotion()
-  const uid = useId().replace(/:/g, '')
+  const uid = useId().replaceAll(':', '')
   const gid = `body-${uid}`
   const group = groupOf(status)
 
-  // Click animation (random, re-triggerable).
-  const [clickAnim, setClickAnim] = useState<ClickAnim | null>(null)
-  const clickCount = useRef(0)
-  const [showHearts, setShowHearts] = useState(false)
-
-  // Ojos: vuelven a neutral 10s después de completar.
-  const [eyeGroup, setEyeGroup] = useState<Group>(group)
-  useEffect(() => {
-    if (group === 'done') {
-      setEyeGroup('done')
-      const id = setTimeout(() => setEyeGroup('idle'), 10000)
-      return () => clearTimeout(id)
-    }
-    setEyeGroup(group)
-  }, [group])
-
-  const handleClick = () => {
-    clickCount.current += 1
-    const anim = randomClickAnim()
-    if (anim === 'hearts') {
-      setShowHearts(true)
-      setTimeout(() => setShowHearts(false), 1500)
-    } else {
-      setClickAnim(anim)
-    }
-  }
-
-  const ca = clickAnim ? CLICK_VARIANTS[clickAnim] : null
+  const click = useClickAnimation()
+  const eyeGroup = useEyeGroup(group)
 
   // Desfase determinista por instancia (parpadeo/flotación escalonados).
-  const seed = [...id].reduce((a, c) => a + c.charCodeAt(0), 0)
+  const seed = [...id].reduce((a, c) => a + (c.codePointAt(0) ?? 0), 0)
   const delay = (seed % 10) / 5 // 0..2s
 
-  const expr = showHearts ? 'hearts' : eyeGroup === 'done' ? 'happy' : eyeGroup === 'fail' ? 'x' : 'neutral'
+  const expr = expressionOf(click.showHearts, eyeGroup)
   const eyeColor = expr === 'x' ? '#FFB4B4' : eye
   const ear = shade(color, -0.14)
+  /** Estado que anima el SVG: 'rest' deja el robot quieto si se pide menos movimiento. */
+  const motionState = reduce ? 'rest' : group
+  const scanning = group === 'working' && !reduce
 
   // Animación a nivel SVG (flotar / bob / rebote / temblor).
   const svgVariants: Variants = {
@@ -208,13 +317,13 @@ export function AgentRobot({
 
   return (
     <motion.div
-      key={`click-${clickCount.current}`}
-      onClick={handleClick}
+      key={`click-${click.count}`}
+      onClick={click.onClick}
       className="cursor-pointer"
       style={{ display: 'inline-flex', perspective: 600 }}
-      animate={ca?.animate}
-      transition={ca?.transition}
-      onAnimationComplete={() => setClickAnim(null)}
+      animate={click.variant?.animate}
+      transition={click.variant?.transition}
+      onAnimationComplete={click.clear}
     >
     <motion.svg
       width={size}
@@ -225,7 +334,7 @@ export function AgentRobot({
       className="shrink-0"
       style={{ overflow: 'visible', transformOrigin: 'center' }}
       variants={svgVariants}
-      animate={reduce ? 'rest' : group}
+      animate={motionState}
     >
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
@@ -242,7 +351,7 @@ export function AgentRobot({
       <motion.g
         style={{ transformBox: 'view-box', transformOrigin: '24px 12px' }}
         variants={{ idle: { rotate: 0 }, working: { rotate: 0 }, done: { rotate: 0 }, fail: { rotate: 17 }, rest: { rotate: group === 'fail' ? 17 : 0 } }}
-        animate={reduce ? 'rest' : group}
+        animate={motionState}
         transition={{ duration: 0.4, ease: 'easeOut' }}
       >
         <line x1="24" y1="12" x2="24" y2="6.5" stroke={shade(color, -0.08)} strokeWidth="1.6" strokeLinecap="round" />
@@ -255,7 +364,7 @@ export function AgentRobot({
             fail: { scale: 1, opacity: 1 },
             rest: { scale: 1, opacity: 1 },
           }}
-          animate={reduce ? 'rest' : group}
+          animate={motionState}
         >
           <circle cx="24" cy="5" r="3" fill={color} />
           <circle cx="23" cy="4" r="1" fill="#fff" fillOpacity="0.5" />
@@ -276,62 +385,7 @@ export function AgentRobot({
       <rect x="12.5" y="16.5" width="23" height="8" rx="8" fill="#fff" opacity="0.04" />
 
       {/* Ojos (glow) */}
-      <g style={{ filter: `drop-shadow(0 0 1.6px ${eyeColor})` }}>
-        <AnimatePresence mode="wait" initial={false}>
-          {expr === 'neutral' && (
-            <motion.g key="neutral" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-              <motion.g
-                animate={group === 'working' && !reduce ? { x: [0, -1.6, 1.6, 0] } : { x: 0 }}
-                transition={{ duration: 1.8, repeat: group === 'working' && !reduce ? Infinity : 0, ease: 'easeInOut' }}
-              >
-                <motion.g
-                  style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                  animate={reduce ? { scaleY: 1 } : { scaleY: [1, 1, 0.12, 1] }}
-                  transition={{ duration: 4.2, times: [0, 0.93, 0.965, 1], repeat: reduce ? 0 : Infinity, delay, ease: 'easeInOut' }}
-                >
-                  <NeutralEyes shape={eyes} color={eyeColor} />
-                </motion.g>
-              </motion.g>
-            </motion.g>
-          )}
-          {expr === 'hearts' && (
-            <motion.g
-              key="hearts"
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-            >
-              <HeartEyes />
-            </motion.g>
-          )}
-          {expr === 'happy' && (
-            <motion.g
-              key="happy"
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 18 }}
-            >
-              <HappyEyes color={eyeColor} />
-            </motion.g>
-          )}
-          {expr === 'x' && (
-            <motion.g
-              key="x"
-              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ErrorEyes color={eyeColor} />
-            </motion.g>
-          )}
-        </AnimatePresence>
-      </g>
+      <RobotEyes expr={expr} shape={eyes} color={eyeColor} reduce={reduce} scanning={scanning} delay={delay} />
 
       {/* Tinte rojo al fallar */}
       {group === 'fail' && <rect x="8" y="11" width="32" height="29" rx="11" fill="#FF3B3B" opacity="0.16" />}

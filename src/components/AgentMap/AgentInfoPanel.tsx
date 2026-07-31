@@ -23,7 +23,7 @@ export function AgentInfoPanel({
   side,
   bounds,
   onClose,
-}: {
+}: Readonly<{
   accent: string
   name: string
   avatar: string
@@ -34,7 +34,7 @@ export function AgentInfoPanel({
   side: 'left' | 'right'
   bounds: { width: number; height: number }
   onClose: () => void
-}) {
+}>) {
   const left =
     side === 'right'
       ? Math.min(anchor.x + NODE_GAP, bounds.width - PANEL_WIDTH - 8)
@@ -77,6 +77,7 @@ export function AgentInfoPanel({
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="shrink-0 text-[11px] text-white/30 hover:text-white/60"
               aria-label="Cerrar"

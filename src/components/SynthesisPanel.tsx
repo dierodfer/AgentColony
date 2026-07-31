@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSynthesis } from '../hooks/useSynthesis'
+import { ModalBackdrop } from './ModalBackdrop'
 
 function SparklesIcon() {
   return (
@@ -17,10 +18,10 @@ function SparklesIcon() {
 export function SynthesisPanel({
   question,
   answers,
-}: {
+}: Readonly<{
   question: string
   answers: { name: string; text: string }[]
-}) {
+}>) {
   const { text, loading, error, synthesize, reset } = useSynthesis()
   if (answers.length < 2) return null
   const open = loading || error !== null || text !== null
@@ -28,6 +29,7 @@ export function SynthesisPanel({
   return (
     <>
       <button
+        type="button"
         onClick={() => synthesize(question, answers)}
         disabled={loading}
         title="Combinar las respuestas del equipo en una conclusión"
@@ -41,26 +43,26 @@ export function SynthesisPanel({
 
       <AnimatePresence>
         {open && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-            onClick={reset}
-          >
-            <motion.div
+          <ModalBackdrop onClose={reset} label="la síntesis del equipo">
+            <motion.dialog
+              open
+              aria-modal="true"
+              aria-label="Síntesis del equipo"
               initial={{ opacity: 0, scale: 0.97, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 10 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg rounded-2xl border border-line-strong bg-elevated p-6 shadow-2xl shadow-black/50"
+              className="relative m-0 w-full max-w-lg rounded-2xl border border-line-strong bg-elevated p-6 text-inherit shadow-2xl shadow-black/50"
             >
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-white/90">
                   <span className="text-accent">
                     <SparklesIcon />
-                  </span>
+                  </span>{' '}
                   Síntesis del equipo
                 </h3>
                 <button
+                  type="button"
                   onClick={reset}
                   className="text-lg leading-none text-white/40 transition-colors hover:text-white/80"
                 >
@@ -81,8 +83,8 @@ export function SynthesisPanel({
               {text && (
                 <p className="whitespace-pre-line text-[15px] leading-relaxed text-white/85">{text}</p>
               )}
-            </motion.div>
-          </div>
+            </motion.dialog>
+          </ModalBackdrop>
         )}
       </AnimatePresence>
     </>

@@ -30,7 +30,7 @@ export function computeHomePositions(agentIds: string[], jitterRadius = 0.06): R
     const phase = ring === 1 ? angleStep / 2 : 0
     const angle = idxInRing * angleStep + phase - Math.PI / 2
 
-    const seed = [...id].reduce((a, c) => a + c.charCodeAt(0), 0)
+    const seed = [...id].reduce((a, c) => a + (c.codePointAt(0) ?? 0), 0)
     const jitterAngle = ((seed % 100) / 100 - 0.5) * 0.35
     const jitterR = (((seed * 7) % 100) / 100 - 0.5) * jitterRadius
 
@@ -46,6 +46,6 @@ export function computeHomePositions(agentIds: string[], jitterRadius = 0.06): R
 
 /** Profundidad simulada (0.7..1) derivada del id, estable entre renders. */
 export function depthOf(id: string): number {
-  const seed = [...id].reduce((a, c) => a + c.charCodeAt(0), 0)
+  const seed = [...id].reduce((a, c) => a + (c.codePointAt(0) ?? 0), 0)
   return 0.7 + (seed % 30) / 100
 }

@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import type { ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ACCENTS, AgentRobot } from './AgentIdentity'
 import { CliLogo } from './CliLogo'
-import { CLIS } from '../lib/clis'
+import { CLIS, type CliDescriptor } from '../lib/clis'
+import { randomItem } from '../lib/random'
 import { api, type CliAvailability } from '../api'
 import type { ModelsByCli } from '../hooks/useOfficeData'
 import type {
@@ -53,15 +54,67 @@ const labelCls = 'mb-1.5 block text-[11px] font-medium uppercase tracking-wider 
 const fieldCls =
   'w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm text-white/85 outline-none transition-colors placeholder:text-white/25 focus:border-accent/50'
 
+/** Tooltip del chip de un CLI según lo que sepamos de su disponibilidad. */
+function cliChipTitle(label: string, check: CliAvailability | undefined): string {
+  if (!check) return label
+  if (check.available) {
+    const version = check.version ? ` (${check.version})` : ''
+    return `${label} · disponible${version}`
+  }
+  const reason = check.error ? ` — ${check.error}` : ''
+  return `${label} · no instalado${reason}`
+}
+
+/** Chip de selección de CLI: logo oficial, color de marca y estado de instalación. */
+function CliChip({
+  cli,
+  selected,
+  check,
+  onSelect,
+}: Readonly<{
+  cli: CliDescriptor
+  selected: boolean
+  /** Disponibilidad conocida; undefined mientras no se haya comprobado. */
+  check: CliAvailability | undefined
+  onSelect: (cli: AgentCli) => void
+}>) {
+  const unavailable = check !== undefined && !check.available
+
+  let stateCls: string
+  if (unavailable) stateCls = 'cursor-not-allowed border-line text-white/30 line-through opacity-50'
+  else if (selected) stateCls = 'text-white'
+  else stateCls = 'border-line bg-surface text-white/60 hover:border-line-strong hover:text-white/85'
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(cli.id)}
+      disabled={unavailable}
+      title={cliChipTitle(cli.label, check)}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${stateCls}`}
+      style={
+        selected && !unavailable
+          ? { borderColor: cli.color, backgroundColor: `color-mix(in srgb, ${cli.color} 16%, transparent)` }
+          : undefined
+      }
+    >
+      <span style={{ color: unavailable ? undefined : cli.color }}>
+        <CliLogo cli={cli.id} size={15} />
+      </span>
+      {cli.label}
+    </button>
+  )
+}
+
 function AvatarPicker({
   value,
   takenAvatars,
   onChange,
-}: {
+}: Readonly<{
   value: string
   takenAvatars: string[]
   onChange: (id: string) => void
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -77,6 +130,7 @@ function AvatarPicker({
   return (
     <div ref={ref} className="relative shrink-0">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className="rounded-2xl p-1 transition hover:bg-white/[0.06]"
       >
@@ -95,18 +149,17 @@ function AvatarPicker({
             {ACCENTS.map((ac) => {
               const used = takenAvatars.includes(ac.id)
               const selected = ac.id === value
+              let stateCls: string
+              if (selected) stateCls = 'ring-2 ring-offset-2 ring-offset-elevated'
+              else if (used) stateCls = 'cursor-not-allowed opacity-25'
+              else stateCls = 'opacity-75 hover:bg-white/[0.05] hover:opacity-100'
               return (
                 <button
+                  type="button"
                   key={ac.id}
                   onClick={() => { if (!used) { onChange(ac.id); setOpen(false) } }}
                   disabled={used}
-                  className={`rounded-xl p-1 transition ${
-                    selected
-                      ? 'ring-2 ring-offset-2 ring-offset-elevated'
-                      : used
-                        ? 'cursor-not-allowed opacity-25'
-                        : 'opacity-75 hover:bg-white/[0.05] hover:opacity-100'
-                  }`}
+                  className={`rounded-xl p-1 transition ${stateCls}`}
                   style={selected ? ({ ['--tw-ring-color' as string]: ac.color }) : undefined}
                 >
                   <AgentRobot id={ac.id} size={36} />
@@ -134,20 +187,23 @@ export function AgentEditor({
   onSave,
   onCreateSkill,
   onCreateTemplate,
-}: Props) {
+}: Readonly<Props>) {
   const [draft, setDraft] = useState<AgentDraft>(initial)
+  // Ids para asociar cada rótulo con su control o su grupo de chips (a11y).
+  const modelId = useId()
+  const cliGroupId = useId()
+  const templatesGroupId = useId()
+  const skillsGroupId = useId()
   const nameTaken = takenNames.includes(draft.name.trim().toLowerCase())
   /** Modelos del CLI actualmente seleccionado. */
   const models = modelsByCli[draft.cli] ?? []
 
   const randomize = () => {
     const freeAvatars = ACCENTS.map((a) => a.id).filter((id) => !takenAvatars.includes(id))
-    const newAvatar = freeAvatars.length > 0
-      ? freeAvatars[Math.floor(Math.random() * freeAvatars.length)]
-      : draft.avatar
+    const newAvatar = randomItem(freeAvatars) ?? draft.avatar
     const freeNames = RANDOM_NAMES.filter((n) => !takenNames.includes(n.toLowerCase()))
     const pool = freeNames.length > 0 ? freeNames : RANDOM_NAMES
-    const newName = pool[Math.floor(Math.random() * pool.length)]
+    const newName = randomItem(pool) ?? draft.name
     setDraft((d) => ({ ...d, avatar: newAvatar, name: newName }))
   }
   const [newSkill, setNewSkill] = useState<{ name: string; body: string; applyTo: string } | null>(null)
@@ -178,7 +234,7 @@ export function AgentEditor({
       : { ...d, model: list.find((m) => /gpt.*mini/i.test(m.id))?.id ?? list[0]?.id ?? d.model }
 
   const selectCli = (cli: AgentCli) => {
-    if (availability && availability[cli] && !availability[cli].available) return
+    if (availability?.[cli] && !availability[cli].available) return
     setDraft((d) => normalizeModel({ ...d, cli }, modelsByCli[cli] ?? []))
   }
 
@@ -246,6 +302,7 @@ export function AgentEditor({
       >
         {/* Cierre en la esquina superior derecha (sin título ni botón Cancelar). */}
         <button
+          type="button"
           onClick={onCancel}
           title="Cerrar"
           aria-label="Cerrar"
@@ -273,6 +330,7 @@ export function AgentEditor({
             className={`${nameTaken ? 'border-st-error/50' : ''} ${fieldCls}`}
           />
           <button
+            type="button"
             onClick={randomize}
             title="Nombre e icono aleatorio"
             className="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg border border-line text-white/40 transition-colors hover:border-line-strong hover:text-white/80"
@@ -286,7 +344,7 @@ export function AgentEditor({
 
         {/* Agente (CLI): chips con el logo oficial de cada uno */}
         <div className="mb-2 flex items-center justify-between">
-          <label className={labelCls.replace('mb-1.5 ', '')}>Agente (CLI)</label>
+          <span id={cliGroupId} className={labelCls.replace('mb-1.5 ', '')}>Agente (CLI)</span>
           <button
             type="button"
             onClick={checkAllClis}
@@ -300,48 +358,21 @@ export function AgentEditor({
             {checkingClis ? 'Comprobando…' : 'Comprobar'}
           </button>
         </div>
-        <div className="mb-4 flex flex-wrap gap-2">
-          {CLIS.map((c) => {
-            const check = availability?.[c.id]
-            const unavailable = check !== undefined && !check.available
-            const on = draft.cli === c.id
-            const title = check === undefined
-              ? c.label
-              : check.available
-                ? `${c.label} · disponible${check.version ? ` (${check.version})` : ''}`
-                : `${c.label} · no instalado${check.error ? ` — ${check.error}` : ''}`
-            return (
-              <button
-                key={c.id}
-                onClick={() => selectCli(c.id)}
-                disabled={unavailable}
-                title={title}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  unavailable
-                    ? 'cursor-not-allowed border-line text-white/30 line-through opacity-50'
-                    : on
-                      ? 'text-white'
-                      : 'border-line bg-surface text-white/60 hover:border-line-strong hover:text-white/85'
-                }`}
-                style={on && !unavailable
-                  ? {
-                      borderColor: c.color,
-                      backgroundColor: `color-mix(in srgb, ${c.color} 16%, transparent)`,
-                    }
-                  : undefined}
-              >
-                <span style={{ color: unavailable ? undefined : c.color }}>
-                  <CliLogo cli={c.id} size={15} />
-                </span>
-                {c.label}
-              </button>
-            )
-          })}
-        </div>
+        <fieldset aria-labelledby={cliGroupId} className="m-0 mb-4 flex min-w-0 flex-wrap gap-2 border-0 p-0">
+          {CLIS.map((c) => (
+            <CliChip
+              key={c.id}
+              cli={c}
+              selected={draft.cli === c.id}
+              check={availability?.[c.id]}
+              onSelect={selectCli}
+            />
+          ))}
+        </fieldset>
 
         {/* Modelo */}
         <div className="mb-1.5 flex items-center justify-between">
-          <label className={labelCls.replace('mb-1.5 ', '')}>Modelo</label>
+          <label htmlFor={modelId} className={labelCls.replace('mb-1.5 ', '')}>Modelo</label>
           <button
             type="button"
             onClick={reloadModels}
@@ -356,6 +387,7 @@ export function AgentEditor({
           </button>
         </div>
         <select
+          id={modelId}
           value={draft.model}
           onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}
           disabled={models.length === 0}
@@ -381,20 +413,22 @@ export function AgentEditor({
 
         {/* Agentes Plantilla */}
         <div className="mb-2 flex items-center justify-between">
-          <label className={labelCls + ' mb-0'}>Agentes Plantilla</label>
+          <span id={templatesGroupId} className={labelCls + ' mb-0'}>Agentes Plantilla</span>
           <button
+            type="button"
             onClick={() => setNewTemplate({ name: '', body: '' })}
             className="text-xs font-medium text-accent transition-colors hover:text-accent-strong"
           >
             + Nuevo
           </button>
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
+        <fieldset aria-labelledby={templatesGroupId} className="m-0 mb-3 flex min-w-0 flex-wrap gap-2 border-0 p-0">
           {templates.length === 0 && <span className="text-sm text-white/35">No hay agentes plantilla disponibles.</span>}
           {templates.map((t) => {
             const on = draft.agentFile === t.file
             return (
               <button
+                type="button"
                 key={t.file}
                 onClick={() => setDraft((d) => ({ ...d, agentFile: on ? '' : t.file }))}
                 className={`rounded-lg px-3 py-1 text-sm font-medium transition-colors ${
@@ -407,7 +441,7 @@ export function AgentEditor({
               </button>
             )
           })}
-        </div>
+        </fieldset>
 
         {newTemplate && (
           <InlineCreate
@@ -436,20 +470,22 @@ export function AgentEditor({
 
         {/* Skills */}
         <div className="mb-2 flex items-center justify-between">
-          <label className={labelCls + ' mb-0'}>Skills</label>
+          <span id={skillsGroupId} className={labelCls + ' mb-0'}>Skills</span>
           <button
+            type="button"
             onClick={() => setNewSkill({ name: '', body: '', applyTo: '' })}
             className="text-xs font-medium text-accent transition-colors hover:text-accent-strong"
           >
             + Nueva
           </button>
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
+        <fieldset aria-labelledby={skillsGroupId} className="m-0 mb-3 flex min-w-0 flex-wrap gap-2 border-0 p-0">
           {skills.length === 0 && <span className="text-sm text-white/35">No hay skills detectadas.</span>}
           {skills.map((s) => {
             const on = draft.skills.includes(s.id)
             return (
               <button
+                type="button"
                 key={s.id}
                 onClick={() => toggleSkill(s.id)}
                 title={s.applyTo ? `Aplica a: ${s.applyTo}` : undefined}
@@ -463,7 +499,7 @@ export function AgentEditor({
               </button>
             )
           })}
-        </div>
+        </fieldset>
 
         {newSkill && (
           <InlineCreate
@@ -498,6 +534,7 @@ export function AgentEditor({
 
         <div className="mt-6 flex justify-end">
           <button
+            type="button"
             onClick={() => onSave({ ...draft, name: draft.name.trim() })}
             disabled={!draft.name.trim() || !draft.agentFile || nameTaken}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-white/30"
@@ -518,26 +555,28 @@ function InlineCreate({
   onCancel,
   onSubmit,
   children,
-}: {
+}: Readonly<{
   title: string
   busy: boolean
   disabled: boolean
   onCancel: () => void
   onSubmit: () => void
   children: ReactNode
-}) {
+}>) {
   return (
     <div className="mb-4 space-y-2 rounded-xl border border-accent/25 bg-accent-weak p-3">
       <p className="text-xs font-medium text-accent">{title}</p>
       {children}
       <div className="flex justify-end gap-2 pt-1">
         <button
+          type="button"
           onClick={onCancel}
           className="rounded-lg px-3 py-1 text-xs font-medium text-white/55 transition-colors hover:text-white/85"
         >
           Cancelar
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           disabled={disabled || busy}
           className="rounded-lg bg-accent px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-strong disabled:opacity-40"

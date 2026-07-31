@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { motion } from 'framer-motion'
 import { AgentRobot } from '../AgentIdentity'
 import { CliBadge } from '../CliBadge'
@@ -37,6 +37,39 @@ function LinkIcon() {
   )
 }
 
+/**
+ * Envoltorio del robot. En modo enlace es un objetivo seleccionable, así que se
+ * renderiza como `<button>` real (accesible por teclado); fuera de ese modo no
+ * tiene interacción propia y es un simple contenedor.
+ */
+function RobotArea({
+  linkingActive,
+  agentName,
+  onLinkTarget,
+  children,
+}: Readonly<{
+  linkingActive: boolean
+  agentName: string
+  onLinkTarget: () => void
+  children: ReactNode
+}>) {
+  const className = 'relative flex items-center justify-center'
+  if (!linkingActive) return <div className={className}>{children}</div>
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={`Enlazar memoria con ${agentName}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        onLinkTarget()
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function AgentNode({
   agent,
   status,
@@ -52,7 +85,7 @@ export function AgentNode({
   linkingActive,
   onStartLink,
   onLinkTarget,
-}: {
+}: Readonly<{
   agent: AgentConfig
   status: AgentStatus
   accent: string
@@ -69,8 +102,8 @@ export function AgentNode({
   linkingActive: boolean
   onStartLink: () => void
   onLinkTarget: () => void
-}) {
-  const seed = useMemo(() => [...agent.id].reduce((a, c) => a + c.charCodeAt(0), 0), [agent.id])
+}>) {
+  const seed = useMemo(() => [...agent.id].reduce((a, c) => a + (c.codePointAt(0) ?? 0), 0), [agent.id])
   const bobAmplitude = 6 + (seed % 5)
   const bobDuration = 3.4 + (seed % 5) * 0.4
   const bobDelay = (seed % 10) / 5
@@ -81,7 +114,9 @@ export function AgentNode({
   // En modo enlace: los demás nodos son objetivos (aro pulsante); el origen se
   // resalta con el acento. Fuera de modo enlace, comportamiento normal (drag).
   const isTarget = linkingActive && !linking
-  const ringColor = linking ? accent : isTarget ? 'var(--color-st-thinking)' : null
+  let ringColor: string | null = null
+  if (linking) ringColor = accent
+  else if (isTarget) ringColor = 'var(--color-st-thinking)'
 
   return (
     <motion.div
@@ -109,13 +144,10 @@ export function AgentNode({
           willChange: 'transform',
         }}
       >
-        <div
-          className="relative flex items-center justify-center"
-          onClick={(e) => {
-            if (!linkingActive) return
-            e.stopPropagation()
-            onLinkTarget()
-          }}
+        <RobotArea
+          linkingActive={linkingActive}
+          agentName={agent.name}
+          onLinkTarget={onLinkTarget}
         >
           <div
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
@@ -143,6 +175,7 @@ export function AgentNode({
           {/* Botón conectar: aparece al hover, fuera del modo enlace. */}
           {!linkingActive && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onStartLink()
@@ -155,8 +188,9 @@ export function AgentNode({
               <LinkIcon />
             </button>
           )}
-        </div>
+        </RobotArea>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation()
             if (linkingActive) onLinkTarget()

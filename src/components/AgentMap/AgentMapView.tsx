@@ -53,7 +53,7 @@ export function AgentMapView({
   cliStatus,
   question,
   answers,
-}: {
+}: Readonly<{
   agents: AgentConfig[]
   runtime: Record<string, AgentRuntime>
   templates: AgentTemplate[]
@@ -77,7 +77,7 @@ export function AgentMapView({
   cliStatus: Record<AgentCli, CliAvailability> | null
   question: string
   answers: { name: string; text: string }[]
-}) {
+}>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [overrides, setOverrides] = useState<Record<string, NodePos>>({})
@@ -199,10 +199,21 @@ export function AgentMapView({
       <div
         ref={containerRef}
         onMouseMove={onMouseMove}
-        onClick={() => linkingFrom && setLinkingFrom(null)}
         className="relative flex-1 overflow-hidden"
       >
         <MapBackground />
+
+        {/* Capa de cancelación del modo enlace: clic fuera de un robot lo cierra.
+            Es un <button> real para que también funcione con teclado (además del
+            atajo Esc), en vez de colgar un onClick del contenedor del mapa. */}
+        {linkingFrom && (
+          <button
+            type="button"
+            aria-label="Cancelar el modo enlace"
+            onClick={() => setLinkingFrom(null)}
+            className="absolute inset-0 z-0 cursor-default"
+          />
+        )}
 
         {/* Capa de hilos de memoria entre agentes enlazados. */}
         {size.width > 0 && memoryLinks.length > 0 && (
@@ -256,6 +267,7 @@ export function AgentMapView({
             if (!pa || !pb) return null
             return (
               <button
+                type="button"
                 key={`unlink-${linkKey(a, b)}`}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -275,8 +287,8 @@ export function AgentMapView({
         {linkingFrom && (
           <div className="pointer-events-none absolute inset-x-0 bottom-6 z-40 flex justify-center px-4">
             <div className="pointer-events-auto rounded-full border border-st-thinking/40 bg-elevated/90 px-4 py-1.5 text-xs font-medium text-white/80 shadow-lg shadow-black/40 backdrop-blur">
-              Elige otro robot para compartir memoria · pulsa de nuevo para desconectar ·
-              <span className="text-white/50"> Esc para cancelar</span>
+              Elige otro robot para compartir memoria · pulsa de nuevo para desconectar ·{' '}
+              <span className="text-white/50">Esc para cancelar</span>
             </div>
           </div>
         )}

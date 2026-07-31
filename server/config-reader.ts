@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import type { AgentTemplate, SkillInfo, AgentConfig, MemoryLink } from './types.ts'
+import { parseFrontmatter as parseYamlFrontmatter, type Frontmatter } from './frontmatter.ts'
 
 // La app se ejecuta desde la raíz del proyecto (el plugin de Vite corre en ese
 // cwd), donde viven .agents/ (plantillas) y .skills/.
@@ -14,16 +15,8 @@ const TEAM_DIR = join(ROOT, '.tmp')
 const TEAM_FILE = join(TEAM_DIR, 'agent.config.json')
 
 /** Separa el frontmatter YAML simple (key: value) del cuerpo markdown. */
-function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
-  const meta: Record<string, string> = {}
-  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
-  if (!match) return { meta, body: raw.trim() }
-
-  for (const line of match[1].split('\n')) {
-    const kv = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (kv) meta[kv[1].trim()] = kv[2].trim().replace(/^["']|["']$/g, '')
-  }
-  return { meta, body: match[2].trim() }
+function parseFrontmatter(raw: string): Frontmatter {
+  return parseYamlFrontmatter(raw) ?? { meta: {}, body: raw.trim() }
 }
 
 /** Capitaliza un id para usarlo como nombre por defecto. */
@@ -149,20 +142,31 @@ export function writeMemoryLinks(links: MemoryLink[]): void {
 
 // ---- Creación de skills y plantillas desde la app ----
 
+/** Recorta los guiones de los extremos recorriendo la cadena, sin regex. */
+function trimDashes(text: string): string {
+  let start = 0
+  let end = text.length
+  while (start < end && text[start] === '-') start++
+  while (end > start && text[end - 1] === '-') end--
+  return text.slice(start, end)
+}
+
 /** Convierte un nombre en un slug seguro para nombre de archivo. */
 function slugify(name: string): string {
-  return name
+  const collapsed = name
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // quita acentos (combining marks)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+    .replaceAll(/[^a-z0-9]+/g, '-')
+  return trimDashes(collapsed).slice(0, 40)
 }
+
+/** Comilla doble escapada para YAML (`\"`), fuera del template para no anidarlos. */
+const ESCAPED_QUOTE = String.raw`\"`
 
 /** Escapa comillas dobles para incrustar un valor en el frontmatter. */
 function yamlValue(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`
+  return `"${value.replaceAll('"', ESCAPED_QUOTE)}"`
 }
 
 /** Construye el frontmatter YAML de una skill, incluyendo `applyTo` si se indica. */
